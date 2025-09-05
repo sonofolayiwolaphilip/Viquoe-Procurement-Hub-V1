@@ -1,0 +1,184 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Revolutionary Design Tokens for Viquoe */
+  --background: #ffffff;
+  --foreground: #001f3f;
+  --card: #f7f9fc;
+  --card-foreground: #374151;
+  --popover: #ffffff;
+  --popover-foreground: #001f3f;
+  --primary: #001f3f;
+  --primary-foreground: #ffffff;
+  --secondary: #ffcc00;
+  --secondary-foreground: #001f3f;
+  --muted: #f7f9fc;
+  --muted-foreground: #374151;
+  --accent: #ffcc00;
+  --accent-foreground: #001f3f;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #f7f9fc;
+  --ring: #ffcc00;
+  --chart-1: #ffcc00;
+  --chart-2: #001f3f;
+  --chart-3: #f7f9fc;
+  --chart-4: #374151;
+  --chart-5: #dc2626;
+  --radius: 0.5rem;
+  --sidebar: #f7f9fc;
+  --sidebar-foreground: #001f3f;
+  --sidebar-primary: #001f3f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffcc00;
+  --sidebar-accent-foreground: #001f3f;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #ffcc00;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Revolutionary Color System */
+  --color-primary: #001f3f; /* Deep navy - professional authority */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ffcc00; /* Gold - prosperity and excellence */
+  --color-secondary-foreground: #001f3f;
+  --color-accent: #ff6b35; /* Vibrant orange - energy and innovation */
+  --color-accent-foreground: #ffffff;
+
+  /* Sophisticated Neutrals */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: #f7f9fc; /* Cool gray - modern elegance */
+  --color-muted-foreground: #374151; /* Charcoal - readable contrast */
+  --color-border: #e2e8f0; /* Light border - subtle definition */
+
+  /* Status & Feedback Colors */
+  --color-success: #10b981; /* Emerald - growth and success */
+  --color-warning: #f59e0b; /* Amber - attention and caution */
+  --color-error: #ef4444; /* Red - clear error indication */
+  --color-info: #3b82f6; /* Blue - informational content */
+
+  /* Surface & Elevation */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-elevated: #ffffff; /* Pure white for elevated surfaces */
+  --color-elevated-foreground: #001f3f;
+
+  /* Interactive Elements */
+  --color-hover: rgba(0, 31, 63, 0.05); /* Subtle hover state */
+  --color-active: rgba(0, 31, 63, 0.1); /* Active state */
+  --color-focus: var(--ring); /* Focus ring color */
+
+  /* Geometric Pattern Colors */
+  --color-pattern-primary: rgba(0, 31, 63, 0.03);
+  --color-pattern-secondary: rgba(255, 204, 0, 0.05);
+  --color-pattern-accent: rgba(255, 107, 53, 0.03);
+
+  /* Additional semantic tokens */
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radius system */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* Sidebar tokens */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Revolutionary Design Utilities */
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+/* Cache-busting comment to force CSS refresh */
+/* African-Inspired Geometric Patterns - v2.0 */
+.pattern-geometric {
+  background-image: radial-gradient(circle at 25% 25%, var(--color-pattern-primary) 2px, transparent 2px),
+    radial-gradient(circle at 75% 75%, var(--color-pattern-secondary) 2px, transparent 2px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
+
+.pattern-diamond {
+  background-image: linear-gradient(45deg, var(--color-pattern-primary) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-pattern-primary) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-pattern-secondary) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-pattern-secondary) 75%);
+  background-size: 30px 30px;
+  background-position: 0 0, 0 15px, 15px -15px, -15px 0px;
+}
+
+.pattern-tribal {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--color-pattern-accent),
+    var(--color-pattern-accent) 2px,
+    transparent 2px,
+    transparent 12px
+  );
+}
+
+/* Professional Shadows with African Warmth */
+.shadow-professional {
+  box-shadow: 0 4px 6px -1px rgba(0, 31, 63, 0.1), 0 2px 4px -2px rgba(0, 31, 63, 0.1);
+}
+
+.shadow-professional-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 31, 63, 0.1), 0 4px 6px -4px rgba(0, 31, 63, 0.1), 0 0 0 1px
+    rgba(255, 204, 0, 0.05);
+}
+
+/* AI-Powered Visual Indicators */
+.ai-glow {
+  box-shadow: 0 0 20px rgba(255, 204, 0, 0.3), 0 0 40px rgba(255, 204, 0, 0.1);
+  animation: pulse-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-glow {
+  from {
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.3), 0 0 40px rgba(255, 204, 0, 0.1);
+  }
+  to {
+    box-shadow: 0 0 30px rgba(255, 204, 0, 0.4), 0 0 60px rgba(255, 204, 0, 0.2);
+  }
+}
