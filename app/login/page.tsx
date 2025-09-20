@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -23,14 +24,23 @@ export default function LoginPage() {
     setError("")
 
     try {
-      // Simulate authentication
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Store user type in localStorage for demo purposes
-      localStorage.setItem("userType", userType)
-      localStorage.setItem("isAuthenticated", "true")
-      localStorage.setItem("userEmail", email)
-
+      // Supabase sign in
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (signInError) {
+        setError(signInError.message)
+        setIsLoading(false)
+        return
+      }
+      // Optionally, check userType from user metadata
+      const userMeta = data.user?.user_metadata
+      if (userMeta && userMeta.userType !== userType) {
+        setError("Account type mismatch. Please select the correct account type.")
+        setIsLoading(false)
+        return
+      }
       // Redirect based on user type
       switch (userType) {
         case "buyer":

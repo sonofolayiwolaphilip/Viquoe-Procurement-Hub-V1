@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -63,10 +64,30 @@ export default function RegisterPage() {
     }
 
     try {
-      // Simulate registration
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Supabase sign up
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            userType,
+            organizationName: formData.organizationName,
+            contactPerson: formData.contactPerson,
+            phone: formData.phone,
+            address: formData.address,
+            organizationType: formData.organizationType,
+            businessRegistration: formData.businessRegistration,
+            description: formData.description,
+            businessSize: formData.businessSize,
+          },
+        },
+      })
+      if (signUpError) {
+        setError(signUpError.message)
+        setIsLoading(false)
+        return
+      }
       setSuccess(true)
-
       // Redirect to login after success
       setTimeout(() => {
         router.push("/login")

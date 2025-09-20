@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
 
 interface User {
   email: string
@@ -26,53 +27,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    // Check if user is logged in on mount
-    const checkAuth = () => {
-      const isAuth = localStorage.getItem("isAuthenticated")
-      const userType = localStorage.getItem("userType") as "buyer" | "supplier" | "admin"
-      const userEmail = localStorage.getItem("userEmail")
-
-      if (isAuth === "true" && userType && userEmail) {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const meta = session.user.user_metadata
         setUser({
-          email: userEmail,
-          userType,
-          organizationName: localStorage.getItem("organizationName") || undefined,
+          email: session.user.email || '',
+          userType: meta?.userType || 'buyer',
+          organizationName: meta?.organizationName,
         })
         setIsAuthenticated(true)
+      } else {
+        setUser(null)
+        setIsAuthenticated(false)
       }
       setIsLoading(false)
+    })
+    // Initial check
+    const session = supabase.auth.getSession().then(({ data }) => {
+      const session = data.session
+      if (session?.user) {
+        const meta = session.user.user_metadata
+        setUser({
+          email: session.user.email || '',
+          userType: meta?.userType || 'buyer',
+          organizationName: meta?.organizationName,
+        })
+        setIsAuthenticated(true)
+      } else {
+        setUser(null)
+        setIsAuthenticated(false)
+      }
+      setIsLoading(false)
+    })
+    return () => {
+      listener.subscription.unsubscribe()
     }
-
-    checkAuth()
   }, [])
 
-  const login = (email: string, userType: "buyer" | "supplier" | "admin") => {
-    if (typeof window === "undefined") return
+  // login and logout are now handled by Supabase Auth
+  const login = () => {}
 
-    const userData = {
-      email,
-      userType,
-      organizationName: localStorage.getItem("organizationName") || undefined,
-    }
-
-    setUser(userData)
-    setIsAuthenticated(true)
-    localStorage.setItem("isAuthenticated", "true")
-    localStorage.setItem("userType", userType)
-    localStorage.setItem("userEmail", email)
-  }
-
-  const logout = () => {
-    if (typeof window === "undefined") return
-
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
     setIsAuthenticated(false)
-    localStorage.removeItem("isAuthenticated")
-    localStorage.removeItem("userType")
-    localStorage.removeItem("userEmail")
-    localStorage.removeItem("organizationName")
   }
 
   return (
