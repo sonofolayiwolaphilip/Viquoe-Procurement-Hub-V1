@@ -45,7 +45,7 @@ Viquoe Procurement Hub is a modern, multi-role procurement management platform b
 └── postcss.config.mjs    # PostCSS/Tailwind config
 ```
 
-## Tech Stack
+## Tech   Stack
 
 - [Next.js](https://nextjs.org/) (App Router)
 - [React](https://react.dev/)
