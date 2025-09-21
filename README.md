@@ -15,6 +15,7 @@ Viquoe Procurement Hub is a modern, multi-role procurement management platform b
 
 ## Folder Structure
 
+
 ```
 ├── app/                  # Next.js app directory (routing, pages, layouts)
 │   ├── admin-dashboard/  # Admin dashboard pages
