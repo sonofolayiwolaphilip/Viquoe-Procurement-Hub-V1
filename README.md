@@ -80,3 +80,6 @@ This project is configured for seamless deployment on [Vercel](https://vercel.co
 ## License
 
 This project is proprietary to VIQUOE. All rights reserved.
+
+
+

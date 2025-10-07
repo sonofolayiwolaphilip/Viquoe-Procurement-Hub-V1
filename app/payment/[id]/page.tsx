@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react" // ✅ CHANGE 1: Added useEffect import
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,11 +11,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, CreditCard, Building2, Smartphone, CheckCircle, Shield, Lock } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
+import { useAuth } from "@/components/auth-provider" // ✅ CHANGE 2: Import authentication hook
 
 export default function PaymentPage() {
   const params = useParams()
   const router = useRouter()
   const invoiceId = params.id as string
+  
+  // ✅ CHANGE 3: Get authentication state
+  const { user, isAuthenticated, isLoading } = useAuth()
 
   const [paymentMethod, setPaymentMethod] = useState("bank-transfer")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -30,6 +34,15 @@ export default function PaymentPage() {
     cardName: "",
     phoneNumber: "",
   })
+
+  // ✅ CHANGE 4: Add authentication check
+  // This runs whenever auth state changes
+  useEffect(() => {
+    // Wait for auth to load, then check if user is authenticated and is a buyer
+    if (!isLoading && (!isAuthenticated || user?.userType !== "buyer")) {
+      router.push("/login") // Redirect to login if not authenticated
+    }
+  }, [isAuthenticated, user, isLoading, router])
 
   // Mock invoice data
   const invoice = {
@@ -58,6 +71,16 @@ export default function PaymentPage() {
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  // ✅ CHANGE 5: Show loading state while checking authentication
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
+
+  // ✅ CHANGE 6: Return null if not authenticated (prevents flash of content)
+  if (!isAuthenticated || user?.userType !== "buyer") {
+    return null
   }
 
   if (paymentSuccess) {

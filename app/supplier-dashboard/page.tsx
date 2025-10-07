@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,11 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Package, Edit, Trash2, Eye, BarChart3, DollarSign, ShoppingCart } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
-import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 
 interface Product {
   id: string
@@ -35,42 +31,48 @@ interface Product {
   createdAt: string
 }
 
+interface NewProductForm {
+  name: string
+  category: string
+  price: string
+  stock: string
+  description: string
+  image: string
+}
+
+interface User {
+  email: string
+  userType: string
+}
+
+// Mock auth hook - replace with your actual auth implementation
+const useAuth = () => {
+  const [isAuthenticated] = useState(true)
+  const [isLoading] = useState(false)
+  const [user] = useState<User>({ email: "supplier@example.com", userType: "supplier" })
+  
+  return { user, isAuthenticated, isLoading }
+}
+
+// Mock router - replace with your actual Next.js router
+const useRouter = () => {
+  return {
+    push: (path: string) => console.log(`Navigate to: ${path}`)
+  }
+}
+
 export default function SupplierDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "1",
-      name: "HP LaserJet Pro M404n Printer",
-      category: "IT Equipment",
-      price: 85000,
-      stock: 25,
-      description: "Professional laser printer for office use",
-      image: "/hp-printer.png",
-      status: "active",
-      createdAt: "2024-01-15",
-    },
-    {
-      id: "2",
-      name: "Canon Ink Cartridge PG-245XL",
-      category: "Office Supplies",
-      price: 8500,
-      stock: 150,
-      description: "High-yield black ink cartridge",
-      image: "/canon-ink-cartridge.jpg",
-      status: "active",
-      createdAt: "2024-01-10",
-    },
-  ])
-
+  const [products, setProducts] = useState<Product[]>([])
   const [isAddProductOpen, setIsAddProductOpen] = useState(false)
-  const [newProduct, setNewProduct] = useState({
+  const [newProduct, setNewProduct] = useState<NewProductForm>({
     name: "",
     category: "",
     price: "",
     stock: "",
     description: "",
-    image: "",
+    image: ""
   })
 
   useEffect(() => {
@@ -88,6 +90,10 @@ export default function SupplierDashboard() {
   }
 
   const handleAddProduct = () => {
+    if (!newProduct.name || !newProduct.category || !newProduct.price || !newProduct.stock) {
+      return
+    }
+
     const product: Product = {
       id: Date.now().toString(),
       name: newProduct.name,
@@ -114,18 +120,18 @@ export default function SupplierDashboard() {
   const lowStockProducts = products.filter((p) => p.stock < 10).length
 
   return (
-    <div className="min-h-screen bg-muted/50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">V</span>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">V</span>
               </div>
               <div>
                 <h1 className="text-xl font-bold">Supplier Dashboard</h1>
-                <p className="text-sm text-muted-foreground">Welcome back, {user?.email}</p>
+                <p className="text-sm text-gray-600">Welcome back, {user?.email}</p>
               </div>
             </div>
             <Button onClick={() => router.push("/")}>Back to Home</Button>
@@ -139,7 +145,7 @@ export default function SupplierDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <Package className="h-4 w-4 text-gray-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalProducts}</div>
@@ -149,7 +155,7 @@ export default function SupplierDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-gray-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₦{totalValue.toLocaleString()}</div>
@@ -159,17 +165,17 @@ export default function SupplierDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Low Stock Items</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <BarChart3 className="h-4 w-4 text-gray-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-warning">{lowStockProducts}</div>
+              <div className="text-2xl font-bold text-yellow-600">{lowStockProducts}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Orders This Month</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <ShoppingCart className="h-4 w-4 text-gray-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">12</div>
@@ -278,63 +284,75 @@ export default function SupplierDashboard() {
             </div>
 
             <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Stock</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {products.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell>
-                          <div className="flex items-center space-x-3">
-                            <img
-                              src={product.image || "/placeholder.svg"}
-                              alt={product.name}
-                              className="w-10 h-10 rounded-lg object-cover"
-                            />
-                            <div>
-                              <div className="font-medium">{product.name}</div>
-                              <div className="text-sm text-muted-foreground">Added {product.createdAt}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{product.category}</Badge>
-                        </TableCell>
-                        <TableCell>₦{product.price.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <span className={product.stock < 10 ? "text-warning font-medium" : ""}>{product.stock}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={product.status === "active" ? "default" : "secondary"}>
-                            {product.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Button size="sm" variant="ghost">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="ghost">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(product.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <CardContent className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium">Product</th>
+                        <th className="text-left py-3 px-4 font-medium">Category</th>
+                        <th className="text-left py-3 px-4 font-medium">Price</th>
+                        <th className="text-left py-3 px-4 font-medium">Stock</th>
+                        <th className="text-left py-3 px-4 font-medium">Status</th>
+                        <th className="text-left py-3 px-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center text-gray-600 py-8">
+                            No products yet. Click "Add Product" to get started.
+                          </td>
+                        </tr>
+                      ) : (
+                        products.map((product) => (
+                          <tr key={product.id} className="border-b hover:bg-gray-50">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center space-x-3">
+                                <img
+                                  src={product.image || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="w-10 h-10 rounded-lg object-cover"
+                                />
+                                <div>
+                                  <div className="font-medium">{product.name}</div>
+                                  <div className="text-sm text-gray-600">Added {product.createdAt}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <Badge variant="secondary">{product.category}</Badge>
+                            </td>
+                            <td className="py-4 px-4">₦{product.price.toLocaleString()}</td>
+                            <td className="py-4 px-4">
+                              <span className={product.stock < 10 ? "text-yellow-600 font-medium" : ""}>
+                                {product.stock}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <Badge variant={product.status === "active" ? "default" : "secondary"}>
+                                {product.status}
+                              </Badge>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center space-x-2">
+                                <Button size="sm" variant="ghost">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleDeleteProduct(product.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -346,7 +364,7 @@ export default function SupplierDashboard() {
                 <CardDescription>Orders placed for your products</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">
+                <p className="text-gray-600">
                   No orders yet. Your products will appear here once buyers place orders.
                 </p>
               </CardContent>
@@ -360,7 +378,7 @@ export default function SupplierDashboard() {
                 <CardDescription>Performance metrics for your products</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Analytics dashboard coming soon.</p>
+                <p className="text-gray-600">Analytics dashboard coming soon.</p>
               </CardContent>
             </Card>
           </TabsContent>

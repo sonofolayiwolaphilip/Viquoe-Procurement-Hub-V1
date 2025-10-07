@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog"
 import { Search, Filter, ShoppingCart, Star, Package, Truck, Shield, CheckCircle } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
 interface Product {
   id: string
@@ -34,6 +36,9 @@ interface Product {
 }
 
 export default function BuyerPortal() {
+  const { user, isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -48,6 +53,13 @@ export default function BuyerPortal() {
     phone: "",
   })
   const [quoteSuccess, setQuoteSuccess] = useState(false)
+
+  // Add authentication check
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || user?.userType !== "buyer")) {
+      router.push("/login")
+    }
+  }, [isAuthenticated, user, isLoading, router])
 
   const products: Product[] = [
     {
@@ -185,6 +197,16 @@ export default function BuyerPortal() {
     }
   }
 
+  // Show loading state
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
+
+  // Redirect if not authenticated
+  if (!isAuthenticated || user?.userType !== "buyer") {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-muted/50">
       {/* Header */}
@@ -207,9 +229,10 @@ export default function BuyerPortal() {
                   Cart ({getCartItemCount()})
                 </Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/login">Sign In</Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/buyer-dashboard">Dashboard</Link>
               </Button>
+              <span className="text-sm text-muted-foreground">{user?.email}</span>
             </div>
           </div>
         </div>
