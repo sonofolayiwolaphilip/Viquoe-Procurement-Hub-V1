@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus } from "lucide-react"
+import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
 import Link from "next/link"
 
 interface Order {
@@ -24,6 +24,7 @@ interface Order {
 export default function BuyerDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const [orders] = useState<Order[]>([
     {
@@ -53,11 +54,32 @@ export default function BuyerDashboard() {
     },
   ])
 
+  // ✅ FIXED: Redirect unauthorized users
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.userType !== "buyer")) {
       router.push("/login")
     }
   }, [isAuthenticated, user, isLoading, router])
+
+  // ✅ ADDED: Logout function
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error("Logout error:", error)
+        alert("Failed to log out. Please try again.")
+      } else {
+        // Redirect to home page after successful logout
+        router.push("/")
+      }
+    } catch (err) {
+      console.error("Unexpected logout error:", err)
+      alert("An error occurred during logout.")
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -89,7 +111,7 @@ export default function BuyerDashboard() {
 
   return (
     <div className="min-h-screen bg-muted/50">
-      {/* Header */}
+      {/* ✅ FIXED: Enhanced Header with Logout */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -102,15 +124,26 @@ export default function BuyerDashboard() {
                 <p className="text-sm text-muted-foreground">Welcome back, {user?.email}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <Button asChild>
                 <Link href="/buyer-portal">
                   <Search className="h-4 w-4 mr-2" />
                   Browse Products
                 </Link>
               </Button>
-              <Button variant="outline" onClick={() => router.push("/")}>
-                Back to Home
+              <Button variant="outline" asChild>
+                <Link href="/">
+                  <Home className="h-4 w-4 mr-2" />
+                  Home
+                </Link>
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                {isLoggingOut ? "Logging out..." : "Logout"}
               </Button>
             </div>
           </div>
@@ -181,34 +214,36 @@ export default function BuyerDashboard() {
 
             <Card>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Items</TableHead>
-                      <TableHead>Supplier</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell className="font-medium">{order.id}</TableCell>
-                        <TableCell>
-                          <div className="max-w-xs">{order.items.join(", ")}</div>
-                        </TableCell>
-                        <TableCell>{order.supplier}</TableCell>
-                        <TableCell>₦{order.total.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                        </TableCell>
-                        <TableCell>{order.date}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Order ID</th>
+                        <th className="text-left p-4 font-medium">Items</th>
+                        <th className="text-left p-4 font-medium">Supplier</th>
+                        <th className="text-left p-4 font-medium">Total</th>
+                        <th className="text-left p-4 font-medium">Status</th>
+                        <th className="text-left p-4 font-medium">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => (
+                        <tr key={order.id} className="border-b">
+                          <td className="p-4 font-medium">{order.id}</td>
+                          <td className="p-4">
+                            <div className="max-w-xs">{order.items.join(", ")}</div>
+                          </td>
+                          <td className="p-4">{order.supplier}</td>
+                          <td className="p-4">₦{order.total.toLocaleString()}</td>
+                          <td className="p-4">
+                            <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                          </td>
+                          <td className="p-4">{order.date}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
