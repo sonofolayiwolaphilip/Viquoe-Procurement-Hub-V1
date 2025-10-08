@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home } from "lucide-react"
+import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
@@ -19,49 +19,56 @@ interface Order {
   status: "pending" | "approved" | "delivered" | "cancelled"
   date: string
   deliveryDate?: string
+  buyer_id: string
 }
 
 export default function BuyerDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const [orders] = useState<Order[]>([
-    {
-      id: "ORD-001",
-      items: ["HP LaserJet Pro M404n", "Canon Ink Cartridge PG-245XL"],
-      supplier: "TechSupply Nigeria",
-      total: 93500,
-      status: "delivered",
-      date: "2024-01-15",
-      deliveryDate: "2024-01-18",
-    },
-    {
-      id: "ORD-002",
-      items: ["Executive Office Chair", "A4 Copy Paper (10 reams)"],
-      supplier: "Furniture Plus",
-      total: 70000,
-      status: "approved",
-      date: "2024-01-20",
-    },
-    {
-      id: "ORD-003",
-      items: ["Dell OptiPlex 3090 Desktop"],
-      supplier: "Computer Solutions",
-      total: 320000,
-      status: "pending",
-      date: "2024-01-22",
-    },
-  ])
+  // Fetch orders from Supabase
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      fetchOrders()
+    }
+  }, [isAuthenticated, user])
 
-  // ✅ FIXED: Redirect unauthorized users
+  const fetchOrders = async () => {
+    if (!user?.id) return
+
+    try {
+      setLoadingOrders(true)
+      setError(null)
+
+      const { data, error: fetchError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("buyer_id", user.id)
+        .order("date", { ascending: false })
+
+      if (fetchError) throw fetchError
+
+      setOrders(data || [])
+    } catch (err: any) {
+      console.error("Error fetching orders:", err)
+      setError(err.message || "Failed to load orders")
+    } finally {
+      setLoadingOrders(false)
+    }
+  }
+
+  // Redirect unauthorized users
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.userType !== "buyer")) {
       router.push("/login")
     }
   }, [isAuthenticated, user, isLoading, router])
 
-  // ✅ ADDED: Logout function
+  // Logout function
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
@@ -70,7 +77,6 @@ export default function BuyerDashboard() {
         console.error("Logout error:", error)
         alert("Failed to log out. Please try again.")
       } else {
-        // Redirect to home page after successful logout
         router.push("/")
       }
     } catch (err) {
@@ -78,6 +84,28 @@ export default function BuyerDashboard() {
       alert("An error occurred during logout.")
     } finally {
       setIsLoggingOut(false)
+    }
+  }
+
+  // Delete order function
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm("Are you sure you want to delete this order?")) return
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .delete()
+        .eq("id", orderId)
+        .eq("buyer_id", user?.id)
+
+      if (error) throw error
+
+      // Update local state
+      setOrders(orders.filter(order => order.id !== orderId))
+      alert("Order deleted successfully")
+    } catch (err: any) {
+      console.error("Error deleting order:", err)
+      alert("Failed to delete order: " + err.message)
     }
   }
 
@@ -111,7 +139,7 @@ export default function BuyerDashboard() {
 
   return (
     <div className="min-h-screen bg-muted/50">
-      {/* ✅ FIXED: Enhanced Header with Logout */}
+      {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -212,38 +240,76 @@ export default function BuyerDashboard() {
               </Button>
             </div>
 
+            {error && (
+              <Card className="bg-red-50 border-red-200">
+                <CardContent className="pt-6">
+                  <p className="text-red-800">{error}</p>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="border-b">
-                      <tr>
-                        <th className="text-left p-4 font-medium">Order ID</th>
-                        <th className="text-left p-4 font-medium">Items</th>
-                        <th className="text-left p-4 font-medium">Supplier</th>
-                        <th className="text-left p-4 font-medium">Total</th>
-                        <th className="text-left p-4 font-medium">Status</th>
-                        <th className="text-left p-4 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.map((order) => (
-                        <tr key={order.id} className="border-b">
-                          <td className="p-4 font-medium">{order.id}</td>
-                          <td className="p-4">
-                            <div className="max-w-xs">{order.items.join(", ")}</div>
-                          </td>
-                          <td className="p-4">{order.supplier}</td>
-                          <td className="p-4">₦{order.total.toLocaleString()}</td>
-                          <td className="p-4">
-                            <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
-                          </td>
-                          <td className="p-4">{order.date}</td>
+                {loadingOrders ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    Loading orders...
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium mb-2">No orders yet</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Start browsing products to place your first order
+                    </p>
+                    <Button asChild>
+                      <Link href="/buyer-portal">
+                        Browse Products
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b">
+                        <tr>
+                          <th className="text-left p-4 font-medium">Order ID</th>
+                          <th className="text-left p-4 font-medium">Items</th>
+                          <th className="text-left p-4 font-medium">Supplier</th>
+                          <th className="text-left p-4 font-medium">Total</th>
+                          <th className="text-left p-4 font-medium">Status</th>
+                          <th className="text-left p-4 font-medium">Date</th>
+                          <th className="text-left p-4 font-medium">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {orders.map((order) => (
+                          <tr key={order.id} className="border-b">
+                            <td className="p-4 font-medium">{order.id}</td>
+                            <td className="p-4">
+                              <div className="max-w-xs">{order.items.join(", ")}</div>
+                            </td>
+                            <td className="p-4">{order.supplier}</td>
+                            <td className="p-4">₦{order.total.toLocaleString()}</td>
+                            <td className="p-4">
+                              <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                            </td>
+                            <td className="p-4">{new Date(order.date).toLocaleDateString()}</td>
+                            <td className="p-4">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteOrder(order.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
