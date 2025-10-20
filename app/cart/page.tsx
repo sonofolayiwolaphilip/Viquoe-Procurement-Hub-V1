@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,41 +10,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Trash2, Plus, Minus, ShoppingCart, CheckCircle, Package } from "lucide-react"
+import { ArrowLeft, Trash2, Plus, Minus, ShoppingCart, CheckCircle, Package, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
 
 interface CartItem {
   id: string
-  name: string
-  supplier: string
+  product_id: string
+  product_name: string
   price: number
   quantity: number
-  image: string
-  category: string
+  supplier?: string
+  category?: string
+  image?: string
 }
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: "1",
-      name: "HP LaserJet Pro M404n Printer",
-      supplier: "TechSupply Nigeria",
-      price: 85000,
-      quantity: 2,
-      image: "/hp-laser-printer.jpg",
-      category: "IT Equipment",
-    },
-    {
-      id: "2",
-      name: "Canon Ink Cartridge PG-245XL",
-      supplier: "Office Essentials Ltd",
-      price: 8500,
-      quantity: 5,
-      image: "/canon-ink-cartridge.jpg",
-      category: "Office Supplies",
-    },
-  ])
-
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+  
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [orderDetails, setOrderDetails] = useState({
     urgency: "standard",
     deliveryAddress: "",
@@ -53,17 +41,86 @@ export default function CartPage() {
     notes: "",
     paymentTerms: "net30",
   })
-
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(false)
+  
+  // Use ref to track if cart has been loaded
+  const hasLoadedCart = useRef(false)
 
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity < 1) return
-    setCartItems((items) => items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
+  // Authentication check
+  useEffect(() => {
+    if (!authLoading && (!isAuthenticated || user?.userType !== "buyer")) {
+      router.push("/login")
+    }
+  }, [isAuthenticated, user, authLoading, router])
+
+  // Load cart from Supabase - only once when user is ready
+  useEffect(() => {
+    if (isAuthenticated && user?.id && !hasLoadedCart.current) {
+      hasLoadedCart.current = true
+      loadCart()
+    }
+  }, [isAuthenticated, user?.id])
+
+  const loadCart = async () => {
+    if (!user?.id) return
+
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from("cart_items")
+        .select("*")
+        .eq("buyer_id", user.id)
+
+      if (error) {
+        console.error("Supabase error:", error)
+        throw error
+      }
+
+      console.log("Loaded cart items:", data)
+      setCartItems(data || [])
+    } catch (err) {
+      console.error("Error loading cart:", err)
+      alert("Failed to load cart")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const removeItem = (id: string) => {
-    setCartItems((items) => items.filter((item) => item.id !== id))
+  const updateQuantity = async (itemId: string, newQuantity: number) => {
+    if (newQuantity < 1) return
+
+    try {
+      const { error } = await supabase
+        .from("cart_items")
+        .update({ quantity: newQuantity })
+        .eq("id", itemId)
+
+      if (error) throw error
+
+      setCartItems((items) =>
+        items.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item))
+      )
+    } catch (err) {
+      console.error("Error updating quantity:", err)
+      alert("Failed to update quantity")
+    }
+  }
+
+  const removeItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from("cart_items")
+        .delete()
+        .eq("id", itemId)
+
+      if (error) throw error
+
+      setCartItems((items) => items.filter((item) => item.id !== itemId))
+    } catch (err) {
+      console.error("Error removing item:", err)
+      alert("Failed to remove item")
+    }
   }
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
@@ -71,24 +128,85 @@ export default function CartPage() {
   const total = subtotal + deliveryFee
 
   const handleSubmitOrder = async () => {
+    if (!user?.id) return
+
+    // Validation
+    if (!orderDetails.contactPerson || !orderDetails.phone || !orderDetails.deliveryAddress) {
+      alert("Please fill in all required fields (Contact Person, Phone, Delivery Address)")
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Group items by supplier
+      const itemsBySupplier = cartItems.reduce((acc, item) => {
+        const supplier = item.supplier || "Unknown Supplier"
+        if (!acc[supplier]) {
+          acc[supplier] = []
+        }
+        acc[supplier].push(item)
+        return acc
+      }, {} as Record<string, CartItem[]>)
+
+      // Create orders for each supplier
+      for (const [supplier, items] of Object.entries(itemsBySupplier)) {
+        const orderTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        
+        const { error } = await supabase
+          .from("orders")
+          .insert({
+            buyer_id: user.id,
+            supplier: supplier,
+            items: items.map(i => `${i.product_name} (x${i.quantity})`),
+            total: orderTotal + (orderTotal > 100000 ? 0 : 5000),
+            status: "pending",
+            date: new Date().toISOString(),
+            urgency: orderDetails.urgency,
+            delivery_address: orderDetails.deliveryAddress,
+            contact_person: orderDetails.contactPerson,
+            phone: orderDetails.phone,
+            notes: orderDetails.notes,
+            payment_terms: orderDetails.paymentTerms
+          })
+
+        if (error) throw error
+      }
+
+      // Clear cart from Supabase
+      const { error: deleteError } = await supabase
+        .from("cart_items")
+        .delete()
+        .eq("buyer_id", user.id)
+
+      if (deleteError) throw deleteError
+
       setOrderSuccess(true)
       setCartItems([])
     } catch (error) {
       console.error("Order submission failed:", error)
+      alert("Failed to submit order. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  if (authLoading || (isLoading && !hasLoadedCart.current)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated || user?.userType !== "buyer") {
+    return null
+  }
+
   if (orderSuccess) {
     return (
       <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-professional-lg">
+        <Card className="w-full max-w-md shadow-lg">
           <CardContent className="pt-6 text-center">
             <CheckCircle className="h-16 w-16 text-primary mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Order Submitted Successfully!</h2>
@@ -99,7 +217,7 @@ export default function CartPage() {
               <Button asChild className="w-full">
                 <Link href="/buyer-dashboard">View Order Status</Link>
               </Button>
-              <Button variant="outline" asChild className="w-full bg-transparent">
+              <Button variant="outline" asChild className="w-full">
                 <Link href="/buyer-portal">Continue Shopping</Link>
               </Button>
             </div>
@@ -115,21 +233,20 @@ export default function CartPage() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/buyer-portal"
-                className="flex items-center space-x-2 text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Products
-              </Link>
-            </div>
+            <Link
+              href="/buyer-portal"
+              className="flex items-center space-x-2 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Back to Products</span>
+            </Link>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-primary-foreground font-bold text-lg">V</span>
               </div>
               <span className="text-xl font-bold">Viquoe</span>
             </div>
+            <div className="text-sm text-muted-foreground">{user?.email}</div>
           </div>
         </div>
       </div>
@@ -140,7 +257,11 @@ export default function CartPage() {
           <p className="text-muted-foreground">Review your items and submit for quotes</p>
         </div>
 
-        {cartItems.length === 0 ? (
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : cartItems.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
               <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -164,15 +285,19 @@ export default function CartPage() {
                     <div className="flex items-center space-x-4">
                       <img
                         src={item.image || "/placeholder.svg"}
-                        alt={item.name}
+                        alt={item.product_name}
                         className="w-20 h-20 object-cover rounded-lg"
                       />
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{item.name}</h3>
-                        <p className="text-sm text-muted-foreground">by {item.supplier}</p>
-                        <Badge variant="secondary" className="mt-1">
-                          {item.category}
-                        </Badge>
+                        <h3 className="font-semibold text-lg">{item.product_name}</h3>
+                        {item.supplier && (
+                          <p className="text-sm text-muted-foreground">by {item.supplier}</p>
+                        )}
+                        {item.category && (
+                          <Badge variant="secondary" className="mt-1">
+                            {item.category}
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-bold">₦{item.price.toLocaleString()}</div>
@@ -182,11 +307,19 @@ export default function CartPage() {
 
                     <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center space-x-2">
-                        <Button size="sm" variant="outline" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        >
                           <Minus className="h-4 w-4" />
                         </Button>
                         <span className="w-12 text-center font-medium">{item.quantity}</span>
-                        <Button size="sm" variant="outline" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        >
                           <Plus className="h-4 w-4" />
                         </Button>
                       </div>
@@ -257,32 +390,35 @@ export default function CartPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="contact">Contact Person</Label>
+                    <Label htmlFor="contact">Contact Person *</Label>
                     <Input
                       id="contact"
                       value={orderDetails.contactPerson}
                       onChange={(e) => setOrderDetails({ ...orderDetails, contactPerson: e.target.value })}
                       placeholder="John Doe"
+                      required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="phone">Phone Number *</Label>
                     <Input
                       id="phone"
                       value={orderDetails.phone}
                       onChange={(e) => setOrderDetails({ ...orderDetails, phone: e.target.value })}
                       placeholder="+234 800 000 0000"
+                      required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="address">Delivery Address</Label>
+                    <Label htmlFor="address">Delivery Address *</Label>
                     <Textarea
                       id="address"
                       value={orderDetails.deliveryAddress}
                       onChange={(e) => setOrderDetails({ ...orderDetails, deliveryAddress: e.target.value })}
                       placeholder="Complete delivery address"
+                      required
                     />
                   </div>
 
@@ -315,7 +451,14 @@ export default function CartPage() {
                   </div>
 
                   <Button onClick={handleSubmitOrder} className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? "Submitting Order..." : "Submit for Quotes"}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting Order...
+                      </>
+                    ) : (
+                      "Submit for Quotes"
+                    )}
                   </Button>
                 </CardContent>
               </Card>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,7 @@ import { Search, Filter, ShoppingCart, Star, Package, Truck, Shield, CheckCircle
 import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
 
 interface Product {
   id: string
@@ -42,7 +43,7 @@ export default function BuyerPortal() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [cart, setCart] = useState<{ id: string; quantity: number }[]>([])
+  const [cartItemCount, setCartItemCount] = useState(0)
   const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false)
   const [quoteRequest, setQuoteRequest] = useState({
     quantity: 1,
@@ -53,13 +54,45 @@ export default function BuyerPortal() {
     phone: "",
   })
   const [quoteSuccess, setQuoteSuccess] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Use ref to prevent infinite loops
+  const hasLoadedCartCount = useRef(false)
 
-  // Add authentication check
+  // Load cart count from Supabase on mount
+  useEffect(() => {
+    if (isAuthenticated && user?.id && !hasLoadedCartCount.current) {
+      hasLoadedCartCount.current = true
+      loadCartCount()
+    }
+  }, [isAuthenticated, user?.id])
+
+  const loadCartCount = async () => {
+    if (!user?.id) return
+
+    try {
+      const { data, error } = await supabase
+        .from("cart_items")
+        .select("quantity")
+        .eq("buyer_id", user.id)
+
+      if (error) throw error
+
+      if (data) {
+        const totalCount = data.reduce((sum, item) => sum + (item.quantity || 0), 0)
+        setCartItemCount(totalCount)
+      }
+    } catch (err) {
+      console.error("Error loading cart count:", err)
+    }
+  }
+
+  // Authentication check
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.userType !== "buyer")) {
       router.push("/login")
     }
-  }, [isAuthenticated, user, isLoading, router])
+  }, [isAuthenticated, user?.userType, isLoading, router])
 
   const products: Product[] = [
     {
@@ -71,8 +104,7 @@ export default function BuyerPortal() {
       rating: 4.8,
       reviews: 24,
       image: "/hp-laser-printer.jpg",
-      description:
-        "Professional monochrome laser printer with fast printing speeds and reliable performance for office environments.",
+      description: "Professional monochrome laser printer with fast printing speeds and reliable performance for office environments.",
       inStock: true,
       deliveryTime: "2-3 business days",
     },
@@ -85,8 +117,7 @@ export default function BuyerPortal() {
       rating: 4.6,
       reviews: 156,
       image: "/canon-ink-cartridge.jpg",
-      description:
-        "High-yield black ink cartridge compatible with Canon PIXMA printers. Delivers sharp, professional documents.",
+      description: "High-yield black ink cartridge compatible with Canon PIXMA printers. Delivers sharp, professional documents.",
       inStock: true,
       deliveryTime: "1-2 business days",
     },
@@ -112,8 +143,7 @@ export default function BuyerPortal() {
       rating: 4.5,
       reviews: 203,
       image: "/a4-copy-paper.jpg",
-      description:
-        "Premium quality A4 copy paper, 80gsm weight. Perfect for printing, copying, and general office use.",
+      description: "Premium quality A4 copy paper, 80gsm weight. Perfect for printing, copying, and general office use.",
       inStock: true,
       deliveryTime: "1-2 business days",
     },
@@ -126,8 +156,7 @@ export default function BuyerPortal() {
       rating: 4.9,
       reviews: 45,
       image: "/dell-desktop-computer.jpg",
-      description:
-        "Compact business desktop with Intel Core i5 processor, 8GB RAM, and 256GB SSD. Perfect for office productivity.",
+      description: "Compact business desktop with Intel Core i5 processor, 8GB RAM, and 256GB SSD. Perfect for office productivity.",
       inStock: true,
       deliveryTime: "3-5 business days",
     },
@@ -140,8 +169,7 @@ export default function BuyerPortal() {
       rating: 4.4,
       reviews: 67,
       image: "/automatic-sanitizer-dispenser.jpg",
-      description:
-        "Touchless automatic hand sanitizer dispenser with sensor activation. Battery operated with adjustable volume.",
+      description: "Touchless automatic hand sanitizer dispenser with sensor activation. Battery operated with adjustable volume.",
       inStock: true,
       deliveryTime: "2-3 business days",
     },
@@ -157,26 +185,84 @@ export default function BuyerPortal() {
     return matchesSearch && matchesCategory
   })
 
-  const addToCart = (productId: string, quantity = 1) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.id === productId)
-      if (existing) {
-        return prev.map((item) => (item.id === productId ? { ...item, quantity: item.quantity + quantity } : item))
-      }
-      return [...prev, { id: productId, quantity }]
-    })
-  }
+  const addToCart = async (productId: string, quantity = 1) => {
+    if (!user?.id) return
 
-  const getCartItemCount = () => {
-    return cart.reduce((total, item) => total + item.quantity, 0)
+    try {
+      const product = products.find(p => p.id === productId)
+      if (!product) return
+
+      // Check if item already exists in cart
+      const { data: existing, error: fetchError } = await supabase
+        .from("cart_items")
+        .select("*")
+        .eq("buyer_id", user.id)
+        .eq("product_id", productId)
+        .maybeSingle()
+
+      if (fetchError) throw fetchError
+
+      if (existing) {
+        // Update quantity
+        const { error } = await supabase
+          .from("cart_items")
+          .update({ quantity: existing.quantity + quantity })
+          .eq("id", existing.id)
+
+        if (error) throw error
+      } else {
+        // Insert new item with all product details
+        const { error } = await supabase
+          .from("cart_items")
+          .insert({
+            buyer_id: user.id,
+            product_id: productId,
+            product_name: product.name,
+            quantity: quantity,
+            price: product.price,
+            supplier: product.supplier,
+            category: product.category,
+            image: product.image
+          })
+
+        if (error) throw error
+      }
+
+      // Reload cart count manually
+      await loadCartCount()
+      
+      alert("✓ Added to cart!")
+    } catch (err: any) {
+      console.error("Error adding to cart:", err)
+      alert("Failed to add to cart: " + err.message)
+    }
   }
 
   const handleQuoteRequest = async () => {
-    if (!selectedProduct) return
+    if (!selectedProduct || !user?.id) return
 
+    setIsSubmitting(true)
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Save quote request to Supabase
+      const { error } = await supabase
+        .from("quote_requests")
+        .insert({
+          buyer_id: user.id,
+          product_id: selectedProduct.id,
+          product_name: selectedProduct.name,
+          supplier: selectedProduct.supplier,
+          quantity: quoteRequest.quantity,
+          urgency: quoteRequest.urgency,
+          notes: quoteRequest.notes,
+          delivery_address: quoteRequest.deliveryAddress,
+          contact_person: quoteRequest.contactPerson,
+          phone: quoteRequest.phone,
+          status: "pending",
+          unit_price: selectedProduct.price,
+          total_price: selectedProduct.price * quoteRequest.quantity
+        })
+
+      if (error) throw error
 
       setQuoteSuccess(true)
       setQuoteRequest({
@@ -192,17 +278,22 @@ export default function BuyerPortal() {
         setQuoteSuccess(false)
         setIsQuoteDialogOpen(false)
       }, 2000)
-    } catch (error) {
-      console.error("Quote request failed:", error)
+    } catch (err: any) {
+      console.error("Quote request failed:", err)
+      alert("Failed to submit quote request: " + err.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  // Show loading state
+  const goToCart = () => {
+    router.push("/cart")
+  }
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
-  // Redirect if not authenticated
   if (!isAuthenticated || user?.userType !== "buyer") {
     return null
   }
@@ -223,11 +314,9 @@ export default function BuyerPortal() {
               <Badge variant="secondary">Buyer Portal</Badge>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/cart">
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  Cart ({getCartItemCount()})
-                </Link>
+              <Button variant="outline" size="sm" onClick={goToCart}>
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Cart ({cartItemCount})
               </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/buyer-dashboard">Dashboard</Link>
@@ -243,8 +332,7 @@ export default function BuyerPortal() {
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-foreground mb-4">Procurement Made Simple</h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Browse thousands of verified products from trusted suppliers. Get competitive prices with guaranteed quality
-            and compliance.
+            Browse thousands of verified products from trusted suppliers. Get competitive prices with guaranteed quality and compliance.
           </p>
         </div>
 
@@ -343,7 +431,7 @@ export default function BuyerPortal() {
                       <DialogContent className="max-w-md">
                         <DialogHeader>
                           <DialogTitle>Request Quote</DialogTitle>
-                          <DialogDescription>Get a custom quote for {product.name}</DialogDescription>
+                          <DialogDescription>Get a custom quote for {selectedProduct?.name}</DialogDescription>
                         </DialogHeader>
 
                         {quoteSuccess ? (
@@ -365,7 +453,7 @@ export default function BuyerPortal() {
                                   min="1"
                                   value={quoteRequest.quantity}
                                   onChange={(e) =>
-                                    setQuoteRequest({ ...quoteRequest, quantity: Number.parseInt(e.target.value) })
+                                    setQuoteRequest({ ...quoteRequest, quantity: Number.parseInt(e.target.value) || 1 })
                                   }
                                 />
                               </div>
@@ -427,8 +515,8 @@ export default function BuyerPortal() {
                               />
                             </div>
 
-                            <Button onClick={handleQuoteRequest} className="w-full">
-                              Submit Quote Request
+                            <Button onClick={handleQuoteRequest} className="w-full" disabled={isSubmitting}>
+                              {isSubmitting ? "Submitting..." : "Submit Quote Request"}
                             </Button>
                           </div>
                         )}
