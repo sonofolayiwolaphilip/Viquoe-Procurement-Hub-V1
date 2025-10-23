@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
+import debounce from "lodash/debounce"
 
 interface CartItem {
   id: string
@@ -23,9 +24,178 @@ interface CartItem {
   price: number
   quantity: number
   supplier?: string
+  supplier_id?: string
   category?: string
   image?: string
 }
+
+interface OrderItem {
+  product_id: string
+  product_name: string
+  price: number
+  quantity: number
+  image?: string
+}
+
+interface OrderDetails {
+  urgency: "standard" | "urgent" | "emergency"
+  deliveryAddress: string
+  contactPerson: string
+  phone: string
+  notes: string
+  paymentTerms: "net30" | "net15" | "pod" | "advance"
+}
+
+// Validation functions
+const validatePhone = (phone: string): boolean => {
+  const phoneRegex = /^\+?[\d\s-()]{10,}$/
+  return phoneRegex.test(phone.trim())
+}
+
+const validateOrderDetails = (details: OrderDetails): string[] => {
+  const errors: string[] = []
+  
+  if (!details.contactPerson?.trim()) {
+    errors.push("Contact person is required")
+  } else if (details.contactPerson.trim().length < 2) {
+    errors.push("Contact person must be at least 2 characters")
+  }
+  
+  if (!details.phone?.trim()) {
+    errors.push("Phone number is required")
+  } else if (!validatePhone(details.phone)) {
+    errors.push("Please enter a valid phone number")
+  }
+  
+  if (!details.deliveryAddress?.trim()) {
+    errors.push("Delivery address is required")
+  } else if (details.deliveryAddress.trim().length < 10) {
+    errors.push("Please provide a complete delivery address")
+  }
+  
+  return errors
+}
+
+// Error handling utility
+const handleSupabaseError = (error: any, context: string): string => {
+  console.error(`Error in ${context}:`, error)
+  
+  // Map common Supabase error codes to user-friendly messages
+  const errorMessages: Record<string, string> = {
+    '23505': 'This item already exists in your cart.',
+    '42501': 'You do not have permission to perform this action.',
+    '42P01': 'Database error. Please try again later.',
+  }
+  
+  return errorMessages[error.code] || `Failed to ${context}. Please try again.`
+}
+
+// Price calculation helper
+const calculateOrderTotals = (items: CartItem[]) => {
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const deliveryFee = subtotal > 100000 ? 0 : 5000
+  const total = subtotal + deliveryFee
+  
+  return { subtotal, deliveryFee, total }
+}
+
+// Loading skeleton component
+const CartSkeleton = () => (
+  <Card>
+    <CardContent className="p-6">
+      <div className="flex animate-pulse space-x-4">
+        <div className="w-20 h-20 bg-gray-200 rounded-lg"></div>
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-16"></div>
+          <div className="h-3 bg-gray-200 rounded w-12"></div>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)
+
+// Memoized Cart Item Component
+const CartItemComponent = React.memo(({ 
+  item, 
+  onUpdateQuantity, 
+  onRemove 
+}: { 
+  item: CartItem
+  onUpdateQuantity: (itemId: string, quantity: number) => void
+  onRemove: (itemId: string) => void
+}) => (
+  <Card key={item.id}>
+    <CardContent className="p-6">
+      <div className="flex items-center space-x-4">
+        <img
+          src={item.image || "/placeholder.svg"}
+          alt={item.product_name}
+          className="w-20 h-20 object-cover rounded-lg"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "/placeholder.svg"
+          }}
+        />
+        <div className="flex-1">
+          <h3 className="font-semibold text-lg">{item.product_name}</h3>
+          {item.supplier && (
+            <p className="text-sm text-muted-foreground">by {item.supplier}</p>
+          )}
+          {item.category && (
+            <Badge variant="secondary" className="mt-1">
+              {item.category}
+            </Badge>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-bold">₦{item.price.toLocaleString()}</div>
+          <div className="text-sm text-muted-foreground">per unit</div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center space-x-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
+            aria-label={`Decrease quantity of ${item.product_name}`}
+            disabled={item.quantity <= 1}
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          <span className="w-12 text-center font-medium">{item.quantity}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+            aria-label={`Increase quantity of ${item.product_name}`}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <div className="text-lg font-bold">₦{(item.price * item.quantity).toLocaleString()}</div>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => onRemove(item.id)}
+            aria-label={`Remove ${item.product_name} from cart`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+))
+
+CartItemComponent.displayName = 'CartItemComponent'
 
 export default function CartPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
@@ -33,7 +203,7 @@ export default function CartPage() {
   
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [orderDetails, setOrderDetails] = useState({
+  const [orderDetails, setOrderDetails] = useState<OrderDetails>({
     urgency: "standard",
     deliveryAddress: "",
     contactPerson: "",
@@ -43,8 +213,8 @@ export default function CartPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   
-  // Use ref to track if cart has been loaded
   const hasLoadedCart = useRef(false)
 
   // Authentication check
@@ -54,7 +224,7 @@ export default function CartPage() {
     }
   }, [isAuthenticated, user, authLoading, router])
 
-  // Load cart from Supabase - only once when user is ready
+  // Load cart from Supabase
   useEffect(() => {
     if (isAuthenticated && user?.id && !hasLoadedCart.current) {
       hasLoadedCart.current = true
@@ -71,40 +241,59 @@ export default function CartPage() {
         .from("cart_items")
         .select("*")
         .eq("buyer_id", user.id)
+        .order('created_at', { ascending: false })
 
       if (error) {
-        console.error("Supabase error:", error)
         throw error
       }
 
-      console.log("Loaded cart items:", data)
       setCartItems(data || [])
     } catch (err) {
-      console.error("Error loading cart:", err)
-      alert("Failed to load cart")
+      const errorMessage = handleSupabaseError(err, "load cart")
+      alert(errorMessage)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
+  // Debounced quantity update
+  const debouncedUpdateQuantity = useCallback(
+    debounce(async (itemId: string, newQuantity: number) => {
+      if (newQuantity < 1) return
+
+      try {
+        const { error } = await supabase
+          .from("cart_items")
+          .update({ 
+            quantity: newQuantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", itemId)
+
+        if (error) throw error
+
+        setCartItems((items) =>
+          items.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item))
+        )
+      } catch (err) {
+        const errorMessage = handleSupabaseError(err, "update quantity")
+        alert(errorMessage)
+        // Revert optimistic update
+        await loadCart()
+      }
+    }, 500),
+    []
+  )
+
+  const updateQuantity = (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return
 
-    try {
-      const { error } = await supabase
-        .from("cart_items")
-        .update({ quantity: newQuantity })
-        .eq("id", itemId)
+    // Optimistic update
+    setCartItems((items) =>
+      items.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item))
+    )
 
-      if (error) throw error
-
-      setCartItems((items) =>
-        items.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item))
-      )
-    } catch (err) {
-      console.error("Error updating quantity:", err)
-      alert("Failed to update quantity")
-    }
+    debouncedUpdateQuantity(itemId, newQuantity)
   }
 
   const removeItem = async (itemId: string) => {
@@ -118,21 +307,60 @@ export default function CartPage() {
 
       setCartItems((items) => items.filter((item) => item.id !== itemId))
     } catch (err) {
-      console.error("Error removing item:", err)
-      alert("Failed to remove item")
+      const errorMessage = handleSupabaseError(err, "remove item")
+      alert(errorMessage)
     }
   }
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const deliveryFee = subtotal > 100000 ? 0 : 5000
-  const total = subtotal + deliveryFee
+  const { subtotal, deliveryFee, total } = calculateOrderTotals(cartItems)
+
+  const validateField = (field: keyof OrderDetails, value: string) => {
+    const errors: Record<string, string> = {}
+    
+    switch (field) {
+      case 'contactPerson':
+        if (!value.trim()) {
+          errors.contactPerson = 'Contact person is required'
+        } else if (value.trim().length < 2) {
+          errors.contactPerson = 'Contact person must be at least 2 characters'
+        }
+        break
+      case 'phone':
+        if (!value.trim()) {
+          errors.phone = 'Phone number is required'
+        } else if (!validatePhone(value)) {
+          errors.phone = 'Please enter a valid phone number'
+        }
+        break
+      case 'deliveryAddress':
+        if (!value.trim()) {
+          errors.deliveryAddress = 'Delivery address is required'
+        } else if (value.trim().length < 10) {
+          errors.deliveryAddress = 'Please provide a complete delivery address'
+        }
+        break
+    }
+    
+    setFieldErrors(prev => ({ ...prev, ...errors }))
+    return Object.keys(errors).length === 0
+  }
+
+  const handleInputChange = (field: keyof OrderDetails, value: string) => {
+    setOrderDetails(prev => ({ ...prev, [field]: value }))
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }))
+    }
+  }
 
   const handleSubmitOrder = async () => {
     if (!user?.id) return
 
-    // Validation
-    if (!orderDetails.contactPerson || !orderDetails.phone || !orderDetails.deliveryAddress) {
-      alert("Please fill in all required fields (Contact Person, Phone, Delivery Address)")
+    // Validate all fields
+    const validationErrors = validateOrderDetails(orderDetails)
+    if (validationErrors.length > 0) {
+      alert(validationErrors.join("\n"))
       return
     }
 
@@ -142,35 +370,57 @@ export default function CartPage() {
       // Group items by supplier
       const itemsBySupplier = cartItems.reduce((acc, item) => {
         const supplier = item.supplier || "Unknown Supplier"
-        if (!acc[supplier]) {
-          acc[supplier] = []
+        const supplierId = item.supplier_id || "unknown"
+        
+        if (!acc[supplierId]) {
+          acc[supplierId] = {
+            supplierName: supplier,
+            items: []
+          }
         }
-        acc[supplier].push(item)
+        acc[supplierId].items.push(item)
         return acc
-      }, {} as Record<string, CartItem[]>)
+      }, {} as Record<string, { supplierName: string; items: CartItem[] }>)
 
       // Create orders for each supplier
-      for (const [supplier, items] of Object.entries(itemsBySupplier)) {
+      const orderPromises = Object.entries(itemsBySupplier).map(([supplierId, { supplierName, items }]) => {
+        const orderItems: OrderItem[] = items.map(item => ({
+          product_id: item.product_id,
+          product_name: item.product_name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image
+        }))
+
         const orderTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const orderDeliveryFee = orderTotal > 100000 ? 0 : 5000
         
-        const { error } = await supabase
+        return supabase
           .from("orders")
           .insert({
             buyer_id: user.id,
-            supplier: supplier,
-            items: items.map(i => `${i.product_name} (x${i.quantity})`),
-            total: orderTotal + (orderTotal > 100000 ? 0 : 5000),
+            supplier_id: supplierId,
+            supplier_name: supplierName,
+            items: orderItems, // Store as structured JSONB
+            total: orderTotal + orderDeliveryFee,
             status: "pending",
             date: new Date().toISOString(),
             urgency: orderDetails.urgency,
-            delivery_address: orderDetails.deliveryAddress,
-            contact_person: orderDetails.contactPerson,
-            phone: orderDetails.phone,
-            notes: orderDetails.notes,
+            delivery_address: orderDetails.deliveryAddress.trim(),
+            contact_person: orderDetails.contactPerson.trim(),
+            phone: orderDetails.phone.trim(),
+            notes: orderDetails.notes.trim(),
             payment_terms: orderDetails.paymentTerms
           })
+          .select()
+      })
 
-        if (error) throw error
+      const results = await Promise.all(orderPromises)
+      
+      // Check for any errors in order creation
+      const hasOrderError = results.some(result => result.error)
+      if (hasOrderError) {
+        throw new Error("Failed to create one or more orders")
       }
 
       // Clear cart from Supabase
@@ -185,7 +435,8 @@ export default function CartPage() {
       setCartItems([])
     } catch (error) {
       console.error("Order submission failed:", error)
-      alert("Failed to submit order. Please try again.")
+      const errorMessage = handleSupabaseError(error, "submit order")
+      alert(errorMessage)
     } finally {
       setIsSubmitting(false)
     }
@@ -258,8 +509,8 @@ export default function CartPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => <CartSkeleton key={i} />)}
           </div>
         ) : cartItems.length === 0 ? (
           <Card>
@@ -280,59 +531,12 @@ export default function CartPage() {
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
               {cartItems.map((item) => (
-                <Card key={item.id}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center space-x-4">
-                      <img
-                        src={item.image || "/placeholder.svg"}
-                        alt={item.product_name}
-                        className="w-20 h-20 object-cover rounded-lg"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{item.product_name}</h3>
-                        {item.supplier && (
-                          <p className="text-sm text-muted-foreground">by {item.supplier}</p>
-                        )}
-                        {item.category && (
-                          <Badge variant="secondary" className="mt-1">
-                            {item.category}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold">₦{item.price.toLocaleString()}</div>
-                        <div className="text-sm text-muted-foreground">per unit</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4">
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <span className="w-12 text-center font-medium">{item.quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      <div className="flex items-center space-x-4">
-                        <div className="text-lg font-bold">₦{(item.price * item.quantity).toLocaleString()}</div>
-                        <Button size="sm" variant="ghost" onClick={() => removeItem(item.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <CartItemComponent
+                  key={item.id}
+                  item={item}
+                  onUpdateQuantity={updateQuantity}
+                  onRemove={removeItem}
+                />
               ))}
             </div>
 
@@ -376,7 +580,9 @@ export default function CartPage() {
                     <Label htmlFor="urgency">Urgency</Label>
                     <Select
                       value={orderDetails.urgency}
-                      onValueChange={(value) => setOrderDetails({ ...orderDetails, urgency: value })}
+                      onValueChange={(value: "standard" | "urgent" | "emergency") => 
+                        setOrderDetails({ ...orderDetails, urgency: value })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -394,10 +600,17 @@ export default function CartPage() {
                     <Input
                       id="contact"
                       value={orderDetails.contactPerson}
-                      onChange={(e) => setOrderDetails({ ...orderDetails, contactPerson: e.target.value })}
+                      onChange={(e) => handleInputChange('contactPerson', e.target.value)}
+                      onBlur={() => validateField('contactPerson', orderDetails.contactPerson)}
                       placeholder="John Doe"
                       required
+                      aria-required="true"
+                      aria-invalid={!!fieldErrors.contactPerson}
+                      className={fieldErrors.contactPerson ? "border-destructive" : ""}
                     />
+                    {fieldErrors.contactPerson && (
+                      <p className="text-sm text-destructive">{fieldErrors.contactPerson}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -405,10 +618,17 @@ export default function CartPage() {
                     <Input
                       id="phone"
                       value={orderDetails.phone}
-                      onChange={(e) => setOrderDetails({ ...orderDetails, phone: e.target.value })}
+                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      onBlur={() => validateField('phone', orderDetails.phone)}
                       placeholder="+234 800 000 0000"
                       required
+                      aria-required="true"
+                      aria-invalid={!!fieldErrors.phone}
+                      className={fieldErrors.phone ? "border-destructive" : ""}
                     />
+                    {fieldErrors.phone && (
+                      <p className="text-sm text-destructive">{fieldErrors.phone}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -416,17 +636,26 @@ export default function CartPage() {
                     <Textarea
                       id="address"
                       value={orderDetails.deliveryAddress}
-                      onChange={(e) => setOrderDetails({ ...orderDetails, deliveryAddress: e.target.value })}
+                      onChange={(e) => handleInputChange('deliveryAddress', e.target.value)}
+                      onBlur={() => validateField('deliveryAddress', orderDetails.deliveryAddress)}
                       placeholder="Complete delivery address"
                       required
+                      aria-required="true"
+                      aria-invalid={!!fieldErrors.deliveryAddress}
+                      className={fieldErrors.deliveryAddress ? "border-destructive" : ""}
                     />
+                    {fieldErrors.deliveryAddress && (
+                      <p className="text-sm text-destructive">{fieldErrors.deliveryAddress}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="payment">Payment Terms</Label>
                     <Select
                       value={orderDetails.paymentTerms}
-                      onValueChange={(value) => setOrderDetails({ ...orderDetails, paymentTerms: value })}
+                      onValueChange={(value: "net30" | "net15" | "pod" | "advance") => 
+                        setOrderDetails({ ...orderDetails, paymentTerms: value })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -445,12 +674,16 @@ export default function CartPage() {
                     <Textarea
                       id="notes"
                       value={orderDetails.notes}
-                      onChange={(e) => setOrderDetails({ ...orderDetails, notes: e.target.value })}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
                       placeholder="Any special requirements"
                     />
                   </div>
 
-                  <Button onClick={handleSubmitOrder} className="w-full" disabled={isSubmitting}>
+                  <Button 
+                    onClick={handleSubmitOrder} 
+                    className="w-full" 
+                    disabled={isSubmitting}
+                  >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
