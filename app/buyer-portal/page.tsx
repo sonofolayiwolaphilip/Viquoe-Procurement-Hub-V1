@@ -27,23 +27,23 @@ interface Product {
   name: string
   description: string
   price: number
-  stock: number              // ← Added: actual stock quantity
+  stock: number
   image: string
-  sku: string               // ← Added: from database
-  categoryId: string        // ← Added: from database
+  sku: string
+  categoryId: string
   supplierId: string
-  minOrder: number          // ← Added: from database
-  isActive: boolean         // ← Added: from database
+  minOrder: number
+  isActive: boolean
   createdAt: string
-  updatedAt: string         // ← Added: from database
+  updatedAt: string
   
-  // Computed fields (we'll calculate these from database data)
-  category?: string          // ← Will be derived from categoryId
-  supplier?: string          // ← Will be fetched via JOIN
-  inStock?: boolean          // ← Will be derived from stock > 0
-  rating?: number            // ← Optional for now
-  reviews?: number           // ← Optional for now
-  deliveryTime?: string      // ← Optional for now
+  // Computed fields
+  category?: string
+  supplier?: string
+  inStock?: boolean
+  rating?: number
+  reviews?: number
+  deliveryTime?: string
 }
 
 interface QuoteRequest {
@@ -61,24 +61,28 @@ const ProductCard = ({
   onAddToCart, 
   onRequestQuote,
   isAddingToCart,
-  isAuthenticated
+  isAuthenticated,
+  user
 }: { 
   product: Product
   onAddToCart: (productId: string) => void
   onRequestQuote: (product: Product) => void
   isAddingToCart: string | null
   isAuthenticated: boolean
+  user: any
 }) => {
-  const handleAddToCart = () => {
-    if (!isAuthenticated) {
+    const handleAddToCart = () => {
+    console.log("Add to cart clicked", { isAuthenticated, userId: user?.id })
+    if (!isAuthenticated || !user?.id) {
       alert("Please log in to add items to cart")
       return
     }
     onAddToCart(product.id)
   }
-
-  const handleRequestQuote = () => {
-    if (!isAuthenticated) {
+  
+ const handleRequestQuote = () => {
+    console.log("Request quote clicked", {   isAuthenticated, userId: user?.id })
+    if (!isAuthenticated || !user?.id) {
       alert("Please log in to request quotes")
       return
     }
@@ -192,56 +196,64 @@ export default function BuyerPortal() {
         setIsLoadingProducts(true)
         setError(null)
         
-        // Fetch products from Supabase using your Product table
-       const { data, error: fetchError } = await supabase
-       .from('Product')
-       .select('*')
-        .eq('isActive', true)
-        .order('createdAt', { ascending: false }) 
-        if (data) {
-  // Fetch supplier names separately
-  const supplierIds = [...new Set(data.map(p => p.supplierId))]
-  const { data: suppliers } = await supabase
-    .from('users')
-    .select('id, name, company')
-    .in('id', supplierIds)
-  
-  const supplierMap = new Map(suppliers?.map(s => [s.id, s]) || [])
-  
-  const transformedProducts = data.map(product => ({
-    ...product,
-    supplier: supplierMap.get(product.supplierId)?.name || 
-              supplierMap.get(product.supplierId)?.company || 
-              'Unknown Supplier'
-  }))
-        }
+        console.log("Fetching products...")
+        
+        // Fetch products from Supabase
+        const { data, error: fetchError } = await supabase
+          .from('Product')
+          .select('*')
+          .eq('isActive', true)
+          .order('createdAt', { ascending: false })
+        
         if (fetchError) {
           console.error("Error fetching products:", fetchError)
           throw fetchError
         }
 
-        if (data) {
-            // Transform the data to match our interface
-      
-            const transformedProducts = data.map((product: any) => ({
-              ...product,
-              // Derive supplier name from the joined users table
-              supplier: product.supplier?.name || product.supplier?.company || 'Unknown Supplier',
-              // Derive inStock from stock quantity
-              inStock: (product.stock || 0) > 0,
-              // Set default values for optional fields
-              category: product.categoryId || 'Uncategorized',
-              rating: product.rating || 4.5,
-              reviews: product.reviews || 0,
-              deliveryTime: product.deliveryTime || '3-5 days'
-            }))
-            
-            setProducts(transformedProducts)
-            
-            // Extract unique categories
-            const uniqueCategories = ['all', ...new Set(transformedProducts.map(p => p.category).filter(Boolean))]
-            setCategories(uniqueCategories)
+        console.log("Products fetched:", data?.length || 0)
+
+        if (data && data.length > 0) {
+          // Fetch supplier names separately
+          const supplierIds = [...new Set(data.map(p => p.supplierId).filter(Boolean))]
+          console.log("Fetching suppliers:", supplierIds)
+          
+          const { data: suppliers, error: supplierError } = await supabase
+            .from('users')
+            .select('id, name, company')
+            .in('id', supplierIds)
+          
+          if (supplierError) {
+            console.error("Error fetching suppliers:", supplierError)
           }
+          
+          console.log("Suppliers fetched:", suppliers?.length || 0)
+          
+          const supplierMap = new Map(suppliers?.map(s => [s.id, s]) || [])
+          
+          // Transform the data to match our interface
+          const transformedProducts: Product[] = data.map((product: any) => ({
+            ...product,
+            supplier: supplierMap.get(product.supplierId)?.name || 
+                      supplierMap.get(product.supplierId)?.company || 
+                      'Unknown Supplier',
+            inStock: (product.stock || 0) > 0,
+            category: product.categoryId || 'Uncategorized',
+            rating: 4.5,
+            reviews: 0,
+            deliveryTime: '3-5 days'
+          }))
+          
+          console.log("Transformed products:", transformedProducts.length)
+          setProducts(transformedProducts)
+          
+          // Extract unique categories
+          const uniqueCategories = ['all', ...new Set(transformedProducts.map(p => p.category).filter(Boolean))]
+          setCategories(uniqueCategories)
+          console.log("Categories:", uniqueCategories)
+        } else {
+          console.log("No products found")
+          setProducts([])
+        }
       } catch (err: any) {
         console.error("Failed to load products:", err)
         setError("Failed to load products. Please try again later.")
@@ -266,7 +278,6 @@ export default function BuyerPortal() {
     try {
       console.log("Loading cart for user:", user.id)
 
-      // Query using your CartItem table schema
       const { data, error } = await supabase
         .from("CartItem")
         .select("quantity")
@@ -302,7 +313,7 @@ export default function BuyerPortal() {
     return products.filter((product) => {
       const matchesSearch =
         product.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-        product.supplier.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        product.supplier?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
         product.description?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
       const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
       return matchesSearch && matchesCategory
@@ -348,30 +359,23 @@ export default function BuyerPortal() {
         productName: product.name 
       })
 
-      // Check if item already exists using your CartItem schema
-     const { data: existing, error: fetchError } = await supabase
-     .from("CartItem")
-     .select("*")
-     .eq("userId", user.id)
-     .eq("productId", productId)
-     .single() // Use single() instead of maybeSingle()
-    // Handle "no rows" error gracefully
+      // Check if item already exists
+      const { data: existing, error: fetchError } = await supabase
+        .from("CartItem")
+        .select("*")
+        .eq("userId", user.id)
+        .eq("productId", productId)
+        .maybeSingle()
 
-    if (fetchError) {
-  
-      if (fetchError.code === 'PGRST116') {
-        // No existing item found - this is normal, proceed with insert
-          console.log("No existing cart item found, will create new one")
-          } else {
-              console.error("Error checking existing cart item:", fetchError)
-                throw fetchError
-              }
-            }
+      if (fetchError) {
+        console.error("Error checking existing cart item:", fetchError)
+        throw fetchError
+      }
 
       console.log("Existing cart item:", existing)
 
       if (existing) {
-        // Update quantity using your schema
+        // Update quantity
         const { error: updateError } = await supabase
           .from("CartItem")
           .update({ 
@@ -389,7 +393,7 @@ export default function BuyerPortal() {
         // Generate a unique ID for the cart item
         const cartItemId = `cart_${user.id}_${productId}_${Date.now()}`
         
-        // Insert new item using your schema
+        // Insert new item
         const { error: insertError } = await supabase
           .from("CartItem")
           .insert({
@@ -416,14 +420,15 @@ export default function BuyerPortal() {
       console.error("Error adding to cart:", err)
       
       // More specific error messages
-      if (err.message.includes("violates row-level security")) {
+      if (err.message?.includes("violates row-level security") || err.code === '42501') {
         alert("Permission denied. Please check your account settings or contact support.")
-      } else if (err.message.includes("duplicate key")) {
+      } else if (err.message?.includes("duplicate key")) {
         alert("This item is already in your cart.")
       } else if (err.code === '23503') {
+        
         alert("Product or user not found. Please refresh the page and try again.")
       } else {
-        alert(`Failed to add to cart: ${err.message}`)
+        alert(`Failed to add to cart: ${err.message || 'Unknown error'}`)
       }
     } finally {
       setIsAddingToCart(null)
@@ -441,7 +446,6 @@ export default function BuyerPortal() {
 
     setIsSubmitting(true)
     try {
-      // Assuming you have a QuoteRequest table with similar naming convention
       const quoteId = `quote_${user.id}_${selectedProduct.id}_${Date.now()}`
       
       const { error } = await supabase
@@ -627,6 +631,7 @@ export default function BuyerPortal() {
                 onRequestQuote={handleRequestQuote}
                 isAddingToCart={isAddingToCart}
                 isAuthenticated={isAuthenticated}
+                user={user}
               />
             ))}
           </div>

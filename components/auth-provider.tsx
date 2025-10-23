@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 
 interface User {
+  id: string
   email: string
   userType?: string
   organizationName?: string
@@ -29,10 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getSession = async () => {
       setIsLoading(true)
       const { data } = await supabase.auth.getSession()
+
       if (data.session?.user) {
-        const userMeta = data.session.user.user_metadata || {}
+        const { user } = data.session
+        const userMeta = user.user_metadata || {}
+
         setUser({
-          email: data.session.user.email || "",
+          id: user.id, // ✅ Include the ID
+          email: user.email || "",
           userType: userMeta.userType,
           organizationName: userMeta.organizationName,
           ...userMeta,
@@ -47,12 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getSession()
 
-    // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const userMeta = session.user.user_metadata || {}
+        const { user } = session
+        const userMeta = user.user_metadata || {}
+
         setUser({
-          email: session.user.email || "",
+          id: user.id, // ✅ Include the ID
+          email: user.email || "",
           userType: userMeta.userType,
           organizationName: userMeta.organizationName,
           ...userMeta,
@@ -73,12 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // user state is updated automatically by the listener
   }
 
   const logout = async () => {
     await supabase.auth.signOut()
-    // user state is updated automatically by the listener
   }
 
   return (
@@ -90,8 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider")
   return context
 }
