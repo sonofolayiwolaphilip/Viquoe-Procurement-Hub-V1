@@ -25,17 +25,25 @@ import Image from "next/image"
 interface Product {
   id: string
   name: string
-  category: string
-  price: number
-  supplier: string
-  supplierId?: string
-  rating: number
-  reviews: number
-  image: string
   description: string
-  inStock: boolean
-  deliveryTime: string
-  createdAt?: string
+  price: number
+  stock: number              // ← Added: actual stock quantity
+  image: string
+  sku: string               // ← Added: from database
+  categoryId: string        // ← Added: from database
+  supplierId: string
+  minOrder: number          // ← Added: from database
+  isActive: boolean         // ← Added: from database
+  createdAt: string
+  updatedAt: string         // ← Added: from database
+  
+  // Computed fields (we'll calculate these from database data)
+  category?: string          // ← Will be derived from categoryId
+  supplier?: string          // ← Will be fetched via JOIN
+  inStock?: boolean          // ← Will be derived from stock > 0
+  rating?: number            // ← Optional for now
+  reviews?: number           // ← Optional for now
+  deliveryTime?: string      // ← Optional for now
 }
 
 interface QuoteRequest {
@@ -116,7 +124,7 @@ const ProductCard = ({
           <div className="flex items-center justify-between mb-4">
             {product.inStock ? (
               <Badge variant="outline" className="text-green-600 border-green-600">
-                In Stock
+                In Stock ({product.stock} available)
               </Badge>
             ) : (
               <Badge variant="outline" className="text-red-600 border-red-600">
@@ -130,10 +138,11 @@ const ProductCard = ({
               variant="outline" 
               className="flex-1" 
               onClick={handleAddToCart}
-              disabled={isAddingToCart === product.id || !product.inStock}
+              disabled={isAddingToCart === product.id || !product.inStock || (product.stock < 1)}
             >
               {isAddingToCart === product.id ? "Adding..." : "Add to Cart"}
             </Button>
+
             <Button 
               className="flex-1" 
               onClick={handleRequestQuote}
@@ -184,24 +193,55 @@ export default function BuyerPortal() {
         setError(null)
         
         // Fetch products from Supabase using your Product table
-        const { data, error: fetchError } = await supabase
-          .from('Product')
-          .select('*')
-          .eq('isActive', true) // Only show active products
-          .order('createdAt', { ascending: false })
-        
+       const { data, error: fetchError } = await supabase
+       .from('Product')
+       .select('*')
+        .eq('isActive', true)
+        .order('createdAt', { ascending: false }) 
+        if (data) {
+  // Fetch supplier names separately
+  const supplierIds = [...new Set(data.map(p => p.supplierId))]
+  const { data: suppliers } = await supabase
+    .from('users')
+    .select('id, name, company')
+    .in('id', supplierIds)
+  
+  const supplierMap = new Map(suppliers?.map(s => [s.id, s]) || [])
+  
+  const transformedProducts = data.map(product => ({
+    ...product,
+    supplier: supplierMap.get(product.supplierId)?.name || 
+              supplierMap.get(product.supplierId)?.company || 
+              'Unknown Supplier'
+  }))
+        }
         if (fetchError) {
           console.error("Error fetching products:", fetchError)
           throw fetchError
         }
 
         if (data) {
-          setProducts(data)
-          
-          // Extract unique categories
-          const uniqueCategories = ['all', ...new Set(data.map(p => p.category).filter(Boolean))]
-          setCategories(uniqueCategories)
-        }
+            // Transform the data to match our interface
+      
+            const transformedProducts = data.map((product: any) => ({
+              ...product,
+              // Derive supplier name from the joined users table
+              supplier: product.supplier?.name || product.supplier?.company || 'Unknown Supplier',
+              // Derive inStock from stock quantity
+              inStock: (product.stock || 0) > 0,
+              // Set default values for optional fields
+              category: product.categoryId || 'Uncategorized',
+              rating: product.rating || 4.5,
+              reviews: product.reviews || 0,
+              deliveryTime: product.deliveryTime || '3-5 days'
+            }))
+            
+            setProducts(transformedProducts)
+            
+            // Extract unique categories
+            const uniqueCategories = ['all', ...new Set(transformedProducts.map(p => p.category).filter(Boolean))]
+            setCategories(uniqueCategories)
+          }
       } catch (err: any) {
         console.error("Failed to load products:", err)
         setError("Failed to load products. Please try again later.")
