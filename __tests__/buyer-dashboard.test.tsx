@@ -147,7 +147,7 @@ describe('BuyerDashboard', () => {
       { ...mockOrders[0], status: 'delivered' as const, total: 100000 },
       { ...mockOrders[0], id: 'order-2', status: 'pending' as const, total: 50000 },
       { ...mockOrders[0], id: 'order-3', status: 'delivered' as const, total: 75000 }
-    ]
+    ]public.orders
 
     ;(supabase.from as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),

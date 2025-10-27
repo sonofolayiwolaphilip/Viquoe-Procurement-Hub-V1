@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react";  // Added React import
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,18 +15,31 @@ import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
-import debounce from "lodash/debounce"
+// import debounce from "lodash/debounce"
+
+// Custom debounce implementation
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout | null = null;
+  return (...args: any[]) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
 
 interface CartItem {
   id: string
-  product_id: string
-  product_name: string
-  price: number
+  userId: string
+  productId: string
   quantity: number
-  supplier?: string
-  supplier_id?: string
-  category?: string
-  image?: string
+  createdAt: string
+  updatedAt: string
+  Product?: {  // This comes from the join
+    name: string
+    price: number
+    image?: string
+    supplierId: string
+    categoryId: string
+  }
 }
 
 interface OrderItem {
@@ -92,7 +105,7 @@ const handleSupabaseError = (error: any, context: string): string => {
 
 // Price calculation helper
 const calculateOrderTotals = (items: CartItem[]) => {
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const subtotal = items.reduce((sum, item) => sum + (item.Product?.price || 0) * item.quantity, 0)
   const deliveryFee = subtotal > 100000 ? 0 : 5000
   const total = subtotal + deliveryFee
   
@@ -120,6 +133,7 @@ const CartSkeleton = () => (
 )
 
 // Memoized Cart Item Component
+// Memoized Cart Item Component
 const CartItemComponent = React.memo(({ 
   item, 
   onUpdateQuantity, 
@@ -133,26 +147,26 @@ const CartItemComponent = React.memo(({
     <CardContent className="p-6">
       <div className="flex items-center space-x-4">
         <img
-          src={item.image || "/placeholder.svg"}
-          alt={item.product_name}
+          src={item.Product?.image || "/placeholder.svg"}
+          alt={item.Product?.name || 'Product image'}
           className="w-20 h-20 object-cover rounded-lg"
           onError={(e) => {
             (e.target as HTMLImageElement).src = "/placeholder.svg"
           }}
         />
         <div className="flex-1">
-          <h3 className="font-semibold text-lg">{item.product_name}</h3>
-          {item.supplier && (
-            <p className="text-sm text-muted-foreground">by {item.supplier}</p>
+          <h3 className="font-semibold text-lg">{item.Product?.name || 'Unknown Product'}</h3>
+          {item.Product?.supplierId && (
+            <p className="text-sm text-muted-foreground">Supplier: {item.Product.supplierId}</p>
           )}
-          {item.category && (
+          {item.Product?.categoryId && (
             <Badge variant="secondary" className="mt-1">
-              {item.category}
+              {item.Product.categoryId}
             </Badge>
           )}
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold">₦{item.price.toLocaleString()}</div>
+          <div className="text-lg font-bold">₦{item.Product?.price?.toLocaleString() || '0'}</div>
           <div className="text-sm text-muted-foreground">per unit</div>
         </div>
       </div>
@@ -163,7 +177,7 @@ const CartItemComponent = React.memo(({
             size="sm"
             variant="outline"
             onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-            aria-label={`Decrease quantity of ${item.product_name}`}
+            aria-label={`Decrease quantity of ${item.Product?.name || 'product'}`}
             disabled={item.quantity <= 1}
           >
             <Minus className="h-4 w-4" />
@@ -173,19 +187,21 @@ const CartItemComponent = React.memo(({
             size="sm"
             variant="outline"
             onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-            aria-label={`Increase quantity of ${item.product_name}`}
+            aria-label={`Increase quantity of ${item.Product?.name || 'product'}`}
           >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         <div className="flex items-center space-x-4">
-          <div className="text-lg font-bold">₦{(item.price * item.quantity).toLocaleString()}</div>
+          <div className="text-lg font-bold">
+            ₦{((item.Product?.price || 0) * item.quantity).toLocaleString()}
+          </div>
           <Button 
             size="sm" 
             variant="ghost" 
             onClick={() => onRemove(item.id)}
-            aria-label={`Remove ${item.product_name} from cart`}
+            aria-label={`Remove ${item.Product?.name || 'product'} from cart`}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -225,6 +241,7 @@ export default function CartPage() {
   }, [isAuthenticated, user, authLoading, router])
 
   // Load cart from Supabase
+    // Load cart from Supabase
   useEffect(() => {
     if (isAuthenticated && user?.id && !hasLoadedCart.current) {
       hasLoadedCart.current = true
@@ -238,10 +255,19 @@ export default function CartPage() {
     setIsLoading(true)
     try {
       const { data, error } = await supabase
-        .from("cart_items")
-        .select("*")
-        .eq("buyer_id", user.id)
-        .order('created_at', { ascending: false })
+        .from("CartItem")
+        .select(`
+          *,
+          Product (
+            name,
+            price,
+            image,
+            supplierId,
+            categoryId
+          )
+        `)
+        .eq("userId", user.id)
+        .order('createdAt', { ascending: false })
 
       if (error) {
         throw error
@@ -263,10 +289,10 @@ export default function CartPage() {
 
       try {
         const { error } = await supabase
-          .from("cart_items")
+          .from("CartItem")
           .update({ 
             quantity: newQuantity,
-            updated_at: new Date().toISOString()
+            updatedAt: new Date().toISOString()
           })
           .eq("id", itemId)
 
@@ -299,7 +325,7 @@ export default function CartPage() {
   const removeItem = async (itemId: string) => {
     try {
       const { error } = await supabase
-        .from("cart_items")
+         .from("CartItem")  // Correct table name
         .delete()
         .eq("id", itemId)
 
@@ -354,93 +380,98 @@ export default function CartPage() {
     }
   }
 
-  const handleSubmitOrder = async () => {
-    if (!user?.id) return
+ const handleSubmitOrder = async () => {
+  if (!user?.id) return
 
-    // Validate all fields
-    const validationErrors = validateOrderDetails(orderDetails)
-    if (validationErrors.length > 0) {
-      alert(validationErrors.join("\n"))
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      // Group items by supplier
-      const itemsBySupplier = cartItems.reduce((acc, item) => {
-        const supplier = item.supplier || "Unknown Supplier"
-        const supplierId = item.supplier_id || "unknown"
-        
-        if (!acc[supplierId]) {
-          acc[supplierId] = {
-            supplierName: supplier,
-            items: []
-          }
-        }
-        acc[supplierId].items.push(item)
-        return acc
-      }, {} as Record<string, { supplierName: string; items: CartItem[] }>)
-
-      // Create orders for each supplier
-      const orderPromises = Object.entries(itemsBySupplier).map(([supplierId, { supplierName, items }]) => {
-        const orderItems: OrderItem[] = items.map(item => ({
-          product_id: item.product_id,
-          product_name: item.product_name,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image
-        }))
-
-        const orderTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-        const orderDeliveryFee = orderTotal > 100000 ? 0 : 5000
-        
-        return supabase
-          .from("orders")
-          .insert({
-            buyer_id: user.id,
-            supplier_id: supplierId,
-            supplier_name: supplierName,
-            items: orderItems, // Store as structured JSONB
-            total: orderTotal + orderDeliveryFee,
-            status: "pending",
-            date: new Date().toISOString(),
-            urgency: orderDetails.urgency,
-            delivery_address: orderDetails.deliveryAddress.trim(),
-            contact_person: orderDetails.contactPerson.trim(),
-            phone: orderDetails.phone.trim(),
-            notes: orderDetails.notes.trim(),
-            payment_terms: orderDetails.paymentTerms
-          })
-          .select()
-      })
-
-      const results = await Promise.all(orderPromises)
-      
-      // Check for any errors in order creation
-      const hasOrderError = results.some(result => result.error)
-      if (hasOrderError) {
-        throw new Error("Failed to create one or more orders")
-      }
-
-      // Clear cart from Supabase
-      const { error: deleteError } = await supabase
-        .from("cart_items")
-        .delete()
-        .eq("buyer_id", user.id)
-
-      if (deleteError) throw deleteError
-
-      setOrderSuccess(true)
-      setCartItems([])
-    } catch (error) {
-      console.error("Order submission failed:", error)
-      const errorMessage = handleSupabaseError(error, "submit order")
-      alert(errorMessage)
-    } finally {
-      setIsSubmitting(false)
-    }
+  // Validate all fields
+  const validationErrors = validateOrderDetails(orderDetails)
+  if (validationErrors.length > 0) {
+    alert(validationErrors.join("\n"))
+    return
   }
+
+  setIsSubmitting(true)
+
+  try {
+    // Group items by supplier
+    const itemsBySupplier = cartItems.reduce((acc, item) => {
+      const supplierId = item.Product?.supplierId || "unknown"
+      const supplierName = item.Product?.supplierId || "Unknown Supplier"
+      
+      if (!acc[supplierId]) {
+        acc[supplierId] = {
+          supplierName: supplierName,
+          items: []
+        }
+      }
+      acc[supplierId].items.push(item)
+      return acc
+    }, {} as Record<string, { supplierName: string; items: CartItem[] }>)
+
+    // Create orders for each supplier
+    const orderPromises = Object.entries(itemsBySupplier).map(([supplierId, { supplierName, items }]) => {
+      const orderItems: OrderItem[] = items.map(item => ({
+        product_id: item.productId,
+        product_name: item.Product?.name || 'Unknown Product',
+        price: item.Product?.price || 0,
+        quantity: item.quantity,
+        image: item.Product?.image
+      }))
+
+      const orderTotal = items.reduce((sum, item) => sum + (item.Product?.price || 0) * item.quantity, 0)
+      const orderDeliveryFee = orderTotal > 100000 ? 0 : 5000
+      
+      return supabase
+        .from("Order")
+        .insert({
+          id: `order_${user.id}_${Date.now()}_${supplierId}`,
+          orderNumber: `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          userId: user.id,
+          supplierId: supplierId,
+          supplierName: supplierName,
+          items: orderItems,
+          totalAmount: orderTotal + orderDeliveryFee,
+          shippingCost: orderDeliveryFee,
+          status: "PENDING",
+          urgency: orderDetails.urgency,
+          shippingAddress: orderDetails.deliveryAddress.trim(),
+          contactPerson: orderDetails.contactPerson.trim(),
+          phone: orderDetails.phone.trim(),
+          notes: orderDetails.notes.trim(),
+          paymentTerms: orderDetails.paymentTerms,
+          expectedDelivery: new Date(Date.now() + (orderDetails.urgency === 'emergency' ? 24 * 60 * 60 * 1000 : orderDetails.urgency === 'urgent' ? 3 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000)).toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        .select()
+    })
+
+    const results = await Promise.all(orderPromises)
+    
+    // Check for any errors in order creation
+    const hasOrderError = results.some(result => result.error)
+    if (hasOrderError) {
+      throw new Error("Failed to create one or more orders")
+    }
+
+    // Clear cart from Supabase
+    const { error: deleteError } = await supabase
+      .from("CartItem")
+      .delete()
+      .eq("userId", user.id)
+
+    if (deleteError) throw deleteError
+
+    setOrderSuccess(true)
+    setCartItems([])
+  } catch (error) {
+    console.error("Order submission failed:", error)
+    const errorMessage = handleSupabaseError(error, "submit order")
+    alert(errorMessage)
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
   if (authLoading || (isLoading && !hasLoadedCart.current)) {
     return (

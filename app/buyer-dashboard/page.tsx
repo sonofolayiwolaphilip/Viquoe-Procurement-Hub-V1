@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw } from "lucide-react"
+import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw, Eye } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
@@ -16,13 +16,22 @@ import { logger } from "@/lib/logger"
 
 interface Order {
   id: string
-  items: string[]
-  supplier: string
-  total: number
-  status: "pending" | "approved" | "delivered" | "cancelled"
-  date: string
-  deliveryDate?: string
-  buyer_id: string
+  orderNumber: string
+  userId: string
+  status: "PENDING" | "APPROVED" | "DELIVERED" | "CANCELLED" | "pending" | "approved" | "delivered" | "cancelled"
+  totalAmount: number
+  shippingCost?: number
+  taxAmount?: number
+  notes?: string
+  shippingAddress?: string
+  expectedDelivery?: string
+  createdAt: string
+  updatedAt: string
+  supplierName?: string
+  productName?: string
+  productImage?: string
+  quantity?: number
+  supplierId?: string
 }
 
 interface QuoteRequest {
@@ -56,8 +65,7 @@ export default function BuyerDashboard() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
   const [quotes, setQuotes] = useState<QuoteRequest[]>([])
-  const [loadingOrders, setLoadingOrders] = useState(true)
-  const [loadingQuotes, setLoadingQuotes] = useState(true)
+  const [loading, setLoading] = useState({ orders: true, quotes: true })
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [confirmation, setConfirmation] = useState<ConfirmationState>({
@@ -69,40 +77,46 @@ export default function BuyerDashboard() {
     isLoading: false
   })
 
-  // Real-time updates handler
-  const handleOrderUpdate = useCallback((payload: any) => {
-    logger.info('BuyerDashboard', 'Processing order update', { 
+  const handleRealTimeUpdate = useCallback((payload: any, type: 'order' | 'quote') => {
+    logger.info('BuyerDashboard', `Processing ${type} update`, { 
       event: payload.eventType, 
-      orderId: payload.new?.id 
+      itemId: payload.new?.id 
     })
 
     if (payload.eventType === 'INSERT') {
-      setOrders(prev => [payload.new, ...prev])
+      if (type === 'order') {
+        setOrders((prev: Order[]) => [payload.new, ...prev])
+      } else {
+        setQuotes((prev: QuoteRequest[]) => [payload.new, ...prev])
+      }
     } else if (payload.eventType === 'UPDATE') {
-      setOrders(prev => prev.map(order => 
-        order.id === payload.new.id ? payload.new : order
-      ))
+      if (type === 'order') {
+        setOrders((prev: Order[]) => prev.map(item => 
+          item.id === payload.new.id ? payload.new : item
+        ))
+      } else {
+        setQuotes((prev: QuoteRequest[]) => prev.map(item => 
+          item.id === payload.new.id ? payload.new : item
+        ))
+      }
     } else if (payload.eventType === 'DELETE') {
-      setOrders(prev => prev.filter(order => order.id !== payload.old.id))
+      if (type === 'order') {
+        setOrders((prev: Order[]) => prev.filter(item => 
+          item.id !== payload.old.id
+        ))
+      } else {
+        setQuotes((prev: QuoteRequest[]) => prev.filter(item => 
+          item.id !== payload.old.id
+        ))
+      }
     }
   }, [])
 
-  const handleQuoteUpdate = useCallback((payload: any) => {
-    logger.info('BuyerDashboard', 'Processing quote update', { 
-      event: payload.eventType, 
-      quoteId: payload.new?.id 
-    })
-
-    if (payload.eventType === 'INSERT') {
-      setQuotes(prev => [payload.new, ...prev])
-    } else if (payload.eventType === 'UPDATE') {
-      setQuotes(prev => prev.map(quote => 
-        quote.id === payload.new.id ? payload.new : quote
-      ))
-    } else if (payload.eventType === 'DELETE') {
-      setQuotes(prev => prev.filter(quote => quote.id !== payload.old.id))
-    }
-  }, [])
+  const handleOrderUpdate = useCallback((payload: any) => 
+    handleRealTimeUpdate(payload, 'order'), [handleRealTimeUpdate])
+  
+  const handleQuoteUpdate = useCallback((payload: any) => 
+    handleRealTimeUpdate(payload, 'quote'), [handleRealTimeUpdate])
 
   // Set up real-time subscriptions
   useRealTimeUpdates({
@@ -111,43 +125,50 @@ export default function BuyerDashboard() {
     onQuoteUpdate: handleQuoteUpdate
   })
 
-  const fetchOrders = useCallback(async () => {
-    if (!user?.id) return
+  // Enhanced fetch function with supplier data
+ const fetchOrders = useCallback(async () => {
+  if (!user?.id) return
 
-    try {
-      setLoadingOrders(true)
-      setError(null)
-      logger.debug('BuyerDashboard', 'Fetching orders', { userId: user.id })
+  try {
+    setLoading(prev => ({ ...prev, orders: true }))
+    setError(null)
+    logger.debug('BuyerDashboard', 'Fetching orders', { userId: user.id })
 
-      const { data, error: fetchError } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("buyer_id", user.id)
-        .order("date", { ascending: false })
+    const { data, error: fetchError } = await supabase
+      .from("Order")
+      .select("*")
+      .eq("userId", user.id)
+      .order("createdAt", { ascending: false })
 
-      if (fetchError) throw fetchError
+    if (fetchError) throw fetchError
 
-      setOrders(data || [])
-      logger.info('BuyerDashboard', 'Orders fetched successfully', { count: data?.length })
-    } catch (err: any) {
-      logger.error('BuyerDashboard', 'Error fetching orders', err)
-      setError(err.message || "Failed to load orders")
-    } finally {
-      setLoadingOrders(false)
-    }
-  }, [user?.id])
+    // Use existing supplierName if available, otherwise use fallback
+    const ordersWithFallbackNames = (data || []).map(order => ({
+      ...order,
+      supplierName: order.supplierName || 'Supplier'
+    }))
+
+    setOrders(ordersWithFallbackNames)
+    logger.info('BuyerDashboard', 'Orders fetched successfully', { count: data?.length })
+  } catch (err: any) {
+    logger.error('BuyerDashboard', 'Error fetching orders', err)
+    setError(err.message || "Failed to load orders")
+  } finally {
+    setLoading(prev => ({ ...prev, orders: false }))
+  }
+}, [user?.id])
 
   const fetchQuotes = useCallback(async () => {
     if (!user?.id) return
 
     try {
-      setLoadingQuotes(true)
+      setLoading(prev => ({ ...prev, quotes: true }))
       logger.debug('BuyerDashboard', 'Fetching quotes', { userId: user.id })
 
       const { data, error: fetchError } = await supabase
-        .from("quote_requests")
+        .from("QuoteRequest")
         .select("*")
-        .eq("buyer_id", user.id)
+        .eq("userId", user.id)
         .order("created_at", { ascending: false })
 
       if (fetchError) throw fetchError
@@ -157,7 +178,7 @@ export default function BuyerDashboard() {
     } catch (err: any) {
       logger.error('BuyerDashboard', 'Error fetching quotes', err)
     } finally {
-      setLoadingQuotes(false)
+      setLoading(prev => ({ ...prev, quotes: false }))
     }
   }, [user?.id])
 
@@ -228,12 +249,12 @@ export default function BuyerDashboard() {
     try {
       logger.info('BuyerDashboard', `Deleting ${type}`, { id })
 
-      const tableName = type === 'order' ? 'orders' : 'quote_requests'
+      const tableName = type === 'order' ? 'Order' : 'QuoteRequest'
       const { error } = await supabase
         .from(tableName)
         .delete()
         .eq("id", id)
-        .eq("buyer_id", user?.id)
+        .eq("userId", user?.id)
 
       if (error) throw error
 
@@ -266,27 +287,121 @@ export default function BuyerDashboard() {
   // Memoized calculations for performance
   const dashboardStats = useMemo(() => ({
     totalOrders: orders.length,
-    pendingOrders: orders.filter((o) => o.status === "pending").length,
-    deliveredOrders: orders.filter((o) => o.status === "delivered").length,
-    totalSpent: orders.filter((o) => o.status === "delivered").reduce((sum, o) => sum + o.total, 0),
+    pendingOrders: orders.filter((o) => 
+      o.status === "PENDING" || o.status === "pending").length,
+    deliveredOrders: orders.filter((o) => 
+      o.status === "DELIVERED" || o.status === "delivered").length,
+    totalSpent: orders.filter((o) => 
+      o.status === "DELIVERED" || o.status === "delivered")
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
     pendingQuotes: quotes.filter((q) => q.status === "pending").length
   }), [orders, quotes])
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "approved":
-        return "bg-blue-100 text-blue-800"
-      case "delivered":
-        return "bg-green-100 text-green-800"
-      case "cancelled":
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+    const statusMap: Record<string, string> = {
+      "pending": "bg-yellow-100 text-yellow-800",
+      "approved": "bg-blue-100 text-blue-800", 
+      "delivered": "bg-green-100 text-green-800",
+      "cancelled": "bg-red-100 text-red-800",
+      "rejected": "bg-red-100 text-red-800"
     }
+    return statusMap[status.toLowerCase()] || "bg-gray-100 text-gray-800"
   }
+
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      "pending": "Processing",
+      "approved": "Confirmed",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled",
+      "rejected": "Rejected"
+    }
+    return statusMap[status.toLowerCase()] || status
+  }
+
+  // Reusable Refresh Button Component
+  const RefreshButton = ({ 
+    onClick, 
+    loading, 
+    className = "" 
+  }: { 
+    onClick: () => void; 
+    loading: boolean; 
+    className?: string 
+  }) => (
+    <Button 
+      variant="outline" 
+      onClick={onClick}
+      disabled={loading}
+      className={`flex items-center gap-2 ${className}`}
+    >
+      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+      {loading ? 'Refreshing...' : 'Refresh'}
+    </Button>
+  )
+
+  // Reusable Empty State Component
+  const EmptyState = ({ 
+    icon: Icon, 
+    title, 
+    description, 
+    buttonText = "Browse Products",
+    buttonHref = "/buyer-portal"
+  }: {
+    icon: any;
+    title: string;
+    description: string;
+    buttonText?: string;
+    buttonHref?: string;
+  }) => (
+    <div className="p-8 text-center">
+      <Icon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+      <h3 className="text-lg font-medium mb-2">{title}</h3>
+      <p className="text-muted-foreground mb-4">{description}</p>
+      <Button asChild>
+        <Link href={buttonHref}>{buttonText}</Link>
+      </Button>
+    </div>
+  )
+
+  // Reusable Loading State Component
+  const LoadingState = ({ message }: { message: string }) => (
+    <div className="p-8 text-center text-muted-foreground">
+      <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
+      {message}
+    </div>
+  )
+
+  // Table Row Actions Component
+  const TableRowActions = ({ 
+    type, 
+    id, 
+    itemName 
+  }: { 
+    type: 'order' | 'quote'; 
+    id: string; 
+    itemName: string; 
+  }) => (
+    <div className="flex gap-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+        aria-label={`View ${type} ${itemName}`}
+      >
+        <Eye className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => showDeleteConfirmation(type, id, itemName)}
+        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+        aria-label={`Delete ${type} ${itemName}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  )
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -298,6 +413,7 @@ export default function BuyerDashboard() {
 
   return (
     <div className="min-h-screen bg-muted/50">
+      {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -311,15 +427,10 @@ export default function BuyerDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Button 
-                variant="outline" 
+              <RefreshButton 
                 onClick={refreshAllData}
-                disabled={refreshing}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </Button>
+                loading={refreshing}
+              />
               <Button asChild>
                 <Link href="/buyer-portal">
                   <Search className="h-4 w-4 mr-2" />
@@ -346,6 +457,7 @@ export default function BuyerDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Grid */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -390,29 +502,24 @@ export default function BuyerDashboard() {
 
         <Tabs defaultValue="orders" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="orders">My Orders</TabsTrigger>
             <TabsTrigger value="quotes">
               Quote Requests
               {dashboardStats.pendingQuotes > 0 && (
                 <Badge className="ml-2 bg-yellow-500">{dashboardStats.pendingQuotes}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+            <TabsTrigger value="suppliers">My Suppliers</TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Order History</h2>
+              <h2 className="text-2xl font-bold">My Orders</h2>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <RefreshButton 
                   onClick={fetchOrders}
-                  disabled={loadingOrders}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loadingOrders ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
+                  loading={loading.orders}
+                />
                 <Button asChild>
                   <Link href="/buyer-portal">
                     <Plus className="h-4 w-4 mr-2" />
@@ -437,61 +544,66 @@ export default function BuyerDashboard() {
 
             <Card>
               <CardContent className="p-0">
-                {loadingOrders ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
-                    Loading orders...
-                  </div>
+                {loading.orders ? (
+                  <LoadingState message="Loading your orders..." />
                 ) : orders.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No orders yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Start browsing products to place your first order
-                    </p>
-                    <Button asChild>
-                      <Link href="/buyer-portal">
-                        Browse Products
-                      </Link>
-                    </Button>
-                  </div>
+                  <EmptyState
+                    icon={Package}
+                    title="No orders yet"
+                    description="Start browsing products to place your first order"
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="border-b">
+                      <thead className="border-b bg-muted/50">
                         <tr>
-                          <th className="text-left p-4 font-medium">Order ID</th>
-                          <th className="text-left p-4 font-medium">Items</th>
-                          <th className="text-left p-4 font-medium">Supplier</th>
+                          <th className="text-left p-4 font-medium">Order #</th>
+                          <th className="text-left p-4 font-medium">Product</th>
+                          
+                          <th className="text-left p-4 font-medium">Quantity</th>
                           <th className="text-left p-4 font-medium">Total</th>
                           <th className="text-left p-4 font-medium">Status</th>
-                          <th className="text-left p-4 font-medium">Date</th>
+                          <th className="text-left p-4 font-medium">Order Date</th>
                           <th className="text-left p-4 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {orders.map((order) => (
-                          <tr key={order.id} className="border-b">
-                            <td className="p-4 font-medium">ORD-{order.id.slice(-6)}</td>
+                          <tr key={order.id} className="border-b hover:bg-muted/25">
+                            <td className="p-4 font-medium">#{order.orderNumber}</td>
                             <td className="p-4">
-                              <div className="max-w-xs">{order.items.join(", ")}</div>
+                              <div className="max-w-xs">
+                                <div className="font-medium">
+                                  {order.productName || 'Product'}
+                                </div>
+                                {order.notes && (
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    {order.notes}
+                                  </div>
+                                )}
+                              </div>
                             </td>
-                            <td className="p-4">{order.supplier}</td>
-                            <td className="p-4">₦{order.total.toLocaleString()}</td>
+                            
                             <td className="p-4">
-                              <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                              {order.quantity || 1}
                             </td>
-                            <td className="p-4">{new Date(order.date).toLocaleDateString()}</td>
+                            <td className="p-4 font-medium">
+                              ₦{order.totalAmount?.toLocaleString() || '0'}
+                            </td>
                             <td className="p-4">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => showDeleteConfirmation('order', order.id, `order ORD-${order.id.slice(-6)}`)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                aria-label={`Delete order ORD-${order.id.slice(-6)}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Badge className={getStatusColor(order.status)}>
+                                {getStatusText(order.status)}
+                              </Badge>
+                            </td>
+                            <td className="p-4 text-muted-foreground">
+                              {new Date(order.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="p-4">
+                              <TableRowActions
+                                type="order"
+                                id={order.id}
+                                itemName={`order ${order.orderNumber}`}
+                              />
                             </td>
                           </tr>
                         ))}
@@ -505,17 +617,12 @@ export default function BuyerDashboard() {
 
           <TabsContent value="quotes" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Quote Requests</h2>
+              <h2 className="text-2xl font-bold">My Quote Requests</h2>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <RefreshButton 
                   onClick={fetchQuotes}
-                  disabled={loadingQuotes}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loadingQuotes ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
+                  loading={loading.quotes}
+                />
                 <Button asChild>
                   <Link href="/buyer-portal">
                     <Plus className="h-4 w-4 mr-2" />
@@ -527,28 +634,18 @@ export default function BuyerDashboard() {
 
             <Card>
               <CardContent className="p-0">
-                {loadingQuotes ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
-                    Loading quote requests...
-                  </div>
+                {loading.quotes ? (
+                  <LoadingState message="Loading your quote requests..." />
                 ) : quotes.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No quote requests yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Browse products and request quotes from suppliers
-                    </p>
-                    <Button asChild>
-                      <Link href="/buyer-portal">
-                        Browse Products
-                      </Link>
-                    </Button>
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title="No quote requests yet"
+                    description="Browse products and request quotes from suppliers"
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="border-b">
+                      <thead className="border-b bg-muted/50">
                         <tr>
                           <th className="text-left p-4 font-medium">Product</th>
                           <th className="text-left p-4 font-medium">Supplier</th>
@@ -557,18 +654,18 @@ export default function BuyerDashboard() {
                           <th className="text-left p-4 font-medium">Total</th>
                           <th className="text-left p-4 font-medium">Urgency</th>
                           <th className="text-left p-4 font-medium">Status</th>
-                          <th className="text-left p-4 font-medium">Date</th>
+                          <th className="text-left p-4 font-medium">Request Date</th>
                           <th className="text-left p-4 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {quotes.map((quote) => (
-                          <tr key={quote.id} className="border-b">
+                          <tr key={quote.id} className="border-b hover:bg-muted/25">
                             <td className="p-4">
                               <div className="font-medium">{quote.product_name}</div>
                               {quote.notes && (
                                 <div className="text-sm text-muted-foreground mt-1">
-                                  Note: {quote.notes}
+                                  {quote.notes}
                                 </div>
                               )}
                             </td>
@@ -577,26 +674,28 @@ export default function BuyerDashboard() {
                             <td className="p-4">₦{quote.unit_price.toLocaleString()}</td>
                             <td className="p-4 font-medium">₦{quote.total_price.toLocaleString()}</td>
                             <td className="p-4">
-                              <Badge variant="outline">
+                              <Badge variant="outline" className={
+                                quote.urgency === 'urgent' ? 'bg-red-50 text-red-700 border-red-200' :
+                                quote.urgency === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                'bg-blue-50 text-blue-700 border-blue-200'
+                              }>
                                 {quote.urgency}
                               </Badge>
                             </td>
                             <td className="p-4">
                               <Badge className={getStatusColor(quote.status)}>
-                                {quote.status}
+                                {getStatusText(quote.status)}
                               </Badge>
                             </td>
-                            <td className="p-4">{new Date(quote.created_at).toLocaleDateString()}</td>
+                            <td className="p-4 text-muted-foreground">
+                              {new Date(quote.created_at).toLocaleDateString()}
+                            </td>
                             <td className="p-4">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => showDeleteConfirmation('quote', quote.id, `quote for ${quote.product_name}`)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                aria-label={`Delete quote for ${quote.product_name}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <TableRowActions
+                                type="quote"
+                                id={quote.id}
+                                itemName={`quote for ${quote.product_name}`}
+                              />
                             </td>
                           </tr>
                         ))}
@@ -611,22 +710,30 @@ export default function BuyerDashboard() {
           <TabsContent value="suppliers">
             <Card>
               <CardHeader>
-                <CardTitle>Preferred Suppliers</CardTitle>
+                <CardTitle>My Preferred Suppliers</CardTitle>
                 <CardDescription>Suppliers you've worked with before</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25">
                     <div>
                       <h4 className="font-medium">TechSupply Nigeria</h4>
                       <p className="text-sm text-muted-foreground">IT Equipment & Office Supplies</p>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="secondary" className="text-xs">⭐ 4.8/5</Badge>
+                        <Badge variant="secondary" className="text-xs">📞 Quick Response</Badge>
+                      </div>
                     </div>
                     <Badge>Verified</Badge>
                   </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25">
                     <div>
                       <h4 className="font-medium">Furniture Plus</h4>
                       <p className="text-sm text-muted-foreground">Office Furniture & Equipment</p>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="secondary" className="text-xs">⭐ 4.6/5</Badge>
+                        <Badge variant="secondary" className="text-xs">🚚 Fast Delivery</Badge>
+                      </div>
                     </div>
                     <Badge>Verified</Badge>
                   </div>
