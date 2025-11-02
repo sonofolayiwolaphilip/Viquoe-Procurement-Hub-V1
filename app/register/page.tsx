@@ -215,76 +215,104 @@ export default function RegisterPage() {
     return null
   }
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+  // Updated handleSubmit function with better error handling
+// Replace your existing handleSubmit function with this:
 
-    // Prevent multiple submissions
-    if (isLoading) return
+const handleSubmit = async (e: FormEvent) => {
+  e.preventDefault()
 
-    setIsLoading(true)
-    setError("")
+  // Prevent multiple submissions
+  if (isLoading) return
 
-    // Validate form
-    const validationError = validateForm()
-    if (validationError) {
-      setError(validationError)
+  setIsLoading(true)
+  setError("")
+
+  // Validate form
+  const validationError = validateForm()
+  if (validationError) {
+    setError(validationError)
+    setIsLoading(false)
+    return
+  }
+
+  try {
+    // Clean and prepare data
+    const cleanPhone = formData.phone.trim().replace(/[\s-]/g, "")
+    const cleanBusinessReg = formData.businessRegistration.trim().toUpperCase().replace(/[\s-]/g, "")
+    
+    // Prepare metadata for Supabase Auth
+    const metadata = {
+      userType,
+      organizationName: formData.organizationName.trim(),
+      contactPerson: formData.contactPerson.trim(),
+      phone: cleanPhone,
+      address: formData.address.trim(),
+      organizationType: formData.organizationType,
+      businessRegistration: cleanBusinessReg,
+      ...(userType === "supplier" && { description: formData.description.trim() }),
+      ...(userType === "buyer" && { businessSize: formData.businessSize }),
+    }
+
+    console.log("Attempting signup with metadata:", metadata)
+
+    // Supabase sign up
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password,
+      options: {
+        data: metadata,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (signUpError) {
+      console.error("Signup error:", signUpError)
+      
+      // Handle specific Supabase errors
+      if (signUpError.message.includes("already registered") || 
+          signUpError.message.includes("User already registered")) {
+        setError("This email is already registered. Please sign in instead.")
+      } else if (signUpError.message.includes("Password")) {
+        setError("Password does not meet requirements. Please try a stronger password.")
+      } else if (signUpError.message.includes("Email") || 
+                 signUpError.message.includes("email")) {
+        setError("Invalid email address. Please check and try again.")
+      } else if (signUpError.status === 500) {
+        setError("Server error. Please ensure your database triggers are set up correctly or contact support.")
+      } else {
+        setError(signUpError.message || "Registration failed. Please try again.")
+      }
       setIsLoading(false)
       return
     }
 
-    try {
-      // Supabase sign up
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email.trim(),
-        password: formData.password,
-        options: {
-          data: {
-            userType,
-            organizationName: formData.organizationName.trim(),
-            contactPerson: formData.contactPerson.trim(),
-            phone: formData.phone.trim(),
-            address: formData.address.trim(),
-            organizationType: formData.organizationType,
-            businessRegistration: formData.businessRegistration.trim().toUpperCase(),
-            description: formData.description.trim(),
-            businessSize: formData.businessSize,
-          },
-          emailRedirectTo: `${window.location.origin}/login`,
-        },
-      })
-
-      if (signUpError) {
-        // Handle specific Supabase errors
-        if (signUpError.message.includes("already registered")) {
-          setError("This email is already registered. Please sign in instead.")
-        } else if (signUpError.message.includes("Password")) {
-          setError("Password does not meet requirements. Please try a stronger password.")
-        } else {
-          setError(signUpError.message)
-        }
-        setIsLoading(false)
-        return
-      }
-
-      if (!data.user) {
-        setError("Registration failed. Please try again.")
-        setIsLoading(false)
-        return
-      }
-
-      // Success - show success message
-      setSuccess(true)
-
-      // Redirect after 3 seconds
-      setTimeout(() => {
-        router.push("/login")
-      }, 3000)
-    } catch (err) {
-      console.error("Registration error:", err)
-      setError("An unexpected error occurred. Please try again.")
+    if (!data.user) {
+      setError("Registration failed. Please try again or contact support.")
       setIsLoading(false)
+      return
     }
+
+    console.log("Signup successful:", data.user.id)
+
+    // Check if email confirmation is required
+    if (data.user && !data.user.confirmed_at) {
+      console.log("Email confirmation required")
+    }
+
+    // Success - show success message
+    setSuccess(true)
+
+    // Redirect after 3 seconds
+    setTimeout(() => {
+      router.push("/login?registered=true")
+    }, 3000)
+    
+  } catch (err) {
+    console.error("Registration error:", err)
+    setError("An unexpected error occurred. Please check your internet connection and try again.")
+    setIsLoading(false)
   }
+}
 
   const updateFormData = (field: keyof FormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
