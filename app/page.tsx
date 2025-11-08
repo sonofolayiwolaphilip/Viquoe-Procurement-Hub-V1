@@ -694,17 +694,17 @@ export default function HomePage() {
               <h4 className="font-semibold mb-4">Solutions</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <Link href="/office-supplies" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Office Supplies
                   </Link>
                 </li>
                 <li>
-                  <Link href="/it-equipment" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     IT Equipment
                   </Link>
                 </li>
                 <li>
-                  <Link href="/facility-materials" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Facility Materials
                   </Link>
                 </li>
@@ -715,17 +715,17 @@ export default function HomePage() {
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <Link href="/about" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     About Us
                   </Link>
                 </li>
                 <li>
-                  <Link href="/careers" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Careers
                   </Link>
                 </li>
                 <li>
-                  <Link href="/contact" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Contact
                   </Link>
                 </li>
@@ -736,17 +736,17 @@ export default function HomePage() {
               <h4 className="font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <Link href="/help" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Help Center
                   </Link>
                 </li>
                 <li>
-                  <Link href="/privacy" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link href="/terms" className="hover:text-foreground">
+                  <Link href="/" className="hover:text-foreground">
                     Terms of Service
                   </Link>
                 </li>
