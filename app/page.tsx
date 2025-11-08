@@ -169,20 +169,20 @@ export default function HomePage() {
           <div className="text-center max-w-5xl mx-auto">
             <div className="mb-6">
               <Badge className="mb-4 bg-secondary/10 text-secondary-foreground border-secondary/30 px-4 py-2">
-                🚀 Revolutionary Procurement Platform
+                Revolutionary Procurement Platform
               </Badge>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-8 text-balance">
-              Africa's Most{" "}
+              Built from {" "} //built from Africa, designed for emerging markets & global commerce
               <span className="text-primary relative">
-                Innovative
+                Africa,
                 <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-secondary to-accent rounded-full"></div>
               </span>
               <br />
               <span className="bg-gradient-to-r from-primary via-primary/80 to-secondary bg-clip-text text-transparent">
-                B2B & B2G Procurement
+                designed for Emerging Markets
               </span>{" "}
-              Ecosystem
+              & global Commerce
             </h1>
             <p className="text-lg md:text-xl lg:text-2xl font-medium text-muted-foreground mb-12 text-pretty leading-relaxed max-w-4xl mx-auto">
               Experience the future of institutional procurement with AI-powered supplier matching, revolutionary
