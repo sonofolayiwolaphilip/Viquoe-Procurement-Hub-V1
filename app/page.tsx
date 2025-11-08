@@ -64,9 +64,9 @@ export default function HomePage() {
               {/* Logo Container */}
               <div className="flex items-center">
                 <img 
-                  src="public/assets/images/logo/bannerlogo1.JPG" 
+                  src="/assets/images/logo/logo_no_bg.png" 
                   alt="Viquoe Logo"
-                  className="h-10 w-auto object-contain" 
+                  className="h-50 w-auto object-contain" 
                 />
               </div>
             </div>
@@ -682,9 +682,9 @@ export default function HomePage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <img 
-                  src="/assets/images/logo/bannerlogo1.JPG" 
+                  src="/assets/images/logo/logo_no_bg.png" 
                   alt="Viquoe Logo"
-                  className="h-8 w-auto object-contain" 
+                  className="h-30 w-auto object-contain" 
                 />
               </div>
               <p className="text-muted-foreground text-sm">Streamlining institutional procurement across Africa</p>
