@@ -173,7 +173,7 @@ export default function HomePage() {
               </Badge>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-8 text-balance">
-              Built from {" "} //built from Africa, designed for emerging markets & global commerce
+              Built from {" "} 
               <span className="text-primary relative">
                 Africa,
                 <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-secondary to-accent rounded-full"></div>
