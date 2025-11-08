@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState } from "react"
@@ -62,20 +61,13 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-primary-foreground font-bold text-xl">V</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xl font-bold text-foreground">Viquoe</span>
-                <div className="flex items-center space-x-2">
-                  <Badge
-                    variant="secondary"
-                    className="text-xs bg-secondary/20 text-secondary-foreground border-secondary/30"
-                  >
-                    B2B • B2G
-                  </Badge>
-                  <div className="w-2 h-2 bg-secondary rounded-full animate-pulse"></div>
-                </div>
+              {/* Logo Container */}
+              <div className="flex items-center">
+                <img 
+                  src="/assets/images/logo/bannerlogo1.jpg" 
+                  alt="Viquoe Logo"
+                  className="h-10 w-auto object-contain" 
+                />
               </div>
             </div>
 
@@ -689,10 +681,11 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-lg">V</span>
-                </div>
-                <span className="text-xl font-bold">Viquoe</span>
+                <img 
+                  src="/assets/images/logo/bannerlogo1.jpg" 
+                  alt="Viquoe Logo"
+                  className="h-8 w-auto object-contain" 
+                />
               </div>
               <p className="text-muted-foreground text-sm">Streamlining institutional procurement across Africa</p>
             </div>
