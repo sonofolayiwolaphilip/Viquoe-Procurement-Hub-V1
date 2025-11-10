@@ -684,7 +684,7 @@ export default function HomePage() {
                 <img 
                   src="/assets/images/logo/vq1.jpg" 
                   alt="Viquoe Logo"
-                  className="h-30 w-auto object-contain" 
+                  className="h-10 w-auto object-contain" 
                 />
               </div>
               <p className="text-muted-foreground text-sm">Streamlining institutional procurement across Africa</p>
