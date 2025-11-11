@@ -168,7 +168,7 @@ export default function HomePage() {
               Built from {" "} 
               <span className="text-primary relative">
                 Africa,
-                <div className="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-secondary to-accent rounded-full"></div>
+                <div className="absolute -bottom-0.5 left-0 w-full h-1 bg-gradient-to-r from-secondary to-accent rounded-full"></div>
               </span>
               <br />
               <span className="bg-gradient-to-r from-primary via-primary/80 to-secondary bg-clip-text text-transparent">
