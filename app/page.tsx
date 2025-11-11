@@ -64,9 +64,9 @@ export default function HomePage() {
               {/* Logo Container */}
               <div className="flex items-center">
                 <img 
-                  src="/assets/images/vq1.jpg" 
+                  src="/assets/images/logo/v1.png" 
                   alt="Viquoe Logo"
-                  className="h-50 w-auto object-contain" 
+                  className="h-10 w-auto object-contain" 
                 />
               </div>
             </div>
@@ -682,7 +682,7 @@ export default function HomePage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <img 
-                  src="/assets/images/logo/vq1.png" 
+                  src="/assets/images/logo/v1.jpg" 
                   alt="Viquoe Logo"
                   className="h-5 w-auto object-contain" 
                 />
