@@ -94,7 +94,7 @@ export default function HomePage() {
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-secondary transition-all duration-200 group-hover:w-full"></span>
               </Link>
               <Link
-                href="#contact"
+                href="/contact"
                 className="text-muted-foreground hover:text-primary transition-all duration-200 font-medium relative group"
               >
                 Contact
@@ -682,7 +682,7 @@ export default function HomePage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <img 
-                  src="/assets/images/logo/v1.jpg" 
+                  src="/assets/images/logo/v1.png" 
                   alt="Viquoe Logo"
                   className="h-5 w-auto object-contain" 
                 />

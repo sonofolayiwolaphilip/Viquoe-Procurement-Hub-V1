@@ -1,0 +1,323 @@
+.
+├── .env.local
+├── .gitignore
+├── .next
+│   ├── app-build-manifest.json
+│   ├── build-manifest.json
+│   ├── cache
+│   │   ├── config.json
+│   │   ├── swc
+│   │   │   └── plugins
+│   │   │       └── v7_linux_x86_64_0.106.15
+│   │   └── webpack
+│   │       ├── client-development
+│   │       │   ├── 0.pack.gz
+│   │       │   ├── 1.pack.gz
+│   │       │   ├── 10.pack.gz
+│   │       │   ├── 11.pack.gz
+│   │       │   ├── 12.pack.gz
+│   │       │   ├── 13.pack.gz
+│   │       │   ├── 14.pack.gz
+│   │       │   ├── 15.pack.gz
+│   │       │   ├── 16.pack.gz
+│   │       │   ├── 17.pack.gz
+│   │       │   ├── 18.pack.gz
+│   │       │   ├── 19.pack.gz
+│   │       │   ├── 2.pack.gz
+│   │       │   ├── 20.pack.gz
+│   │       │   ├── 21.pack.gz
+│   │       │   ├── 22.pack.gz
+│   │       │   ├── 23.pack.gz
+│   │       │   ├── 24.pack.gz
+│   │       │   ├── 25.pack.gz
+│   │       │   ├── 26.pack.gz
+│   │       │   ├── 27.pack.gz
+│   │       │   ├── 3.pack.gz
+│   │       │   ├── 4.pack.gz
+│   │       │   ├── 5.pack.gz
+│   │       │   ├── 6.pack.gz
+│   │       │   ├── 7.pack.gz
+│   │       │   ├── 8.pack.gz
+│   │       │   ├── 9.pack.gz
+│   │       │   ├── index.pack.gz
+│   │       │   └── index.pack.gz.old
+│   │       ├── client-development-fallback
+│   │       │   ├── 0.pack.gz
+│   │       │   ├── 1.pack.gz
+│   │       │   ├── 2.pack.gz
+│   │       │   ├── 3.pack.gz
+│   │       │   ├── index.pack.gz
+│   │       │   └── index.pack.gz.old
+│   │       └── server-development
+│   │           ├── 0.pack.gz
+│   │           ├── 1.pack.gz
+│   │           ├── 10.pack.gz
+│   │           ├── 11.pack.gz
+│   │           ├── 12.pack.gz
+│   │           ├── 13.pack.gz
+│   │           ├── 14.pack.gz
+│   │           ├── 15.pack.gz
+│   │           ├── 16.pack.gz
+│   │           ├── 17.pack.gz
+│   │           ├── 18.pack.gz
+│   │           ├── 19.pack.gz
+│   │           ├── 2.pack.gz
+│   │           ├── 20.pack.gz
+│   │           ├── 21.pack.gz
+│   │           ├── 22.pack.gz
+│   │           ├── 23.pack.gz
+│   │           ├── 24.pack.gz
+│   │           ├── 25.pack.gz
+│   │           ├── 26.pack.gz
+│   │           ├── 27.pack.gz
+│   │           ├── 28.pack.gz
+│   │           ├── 29.pack.gz
+│   │           ├── 3.pack.gz
+│   │           ├── 30.pack.gz
+│   │           ├── 31.pack.gz
+│   │           ├── 32.pack.gz
+│   │           ├── 4.pack.gz
+│   │           ├── 5.pack.gz
+│   │           ├── 6.pack.gz
+│   │           ├── 7.pack.gz
+│   │           ├── 8.pack.gz
+│   │           ├── 9.pack.gz
+│   │           ├── index.pack.gz
+│   │           └── index.pack.gz.old
+│   ├── package.json
+│   ├── react-loadable-manifest.json
+│   ├── server
+│   │   ├── app
+│   │   │   ├── _not-found
+│   │   │   │   ├── page.js
+│   │   │   │   └── page_client-reference-manifest.js
+│   │   │   ├── page.js
+│   │   │   └── page_client-reference-manifest.js
+│   │   ├── app-paths-manifest.json
+│   │   ├── interception-route-rewrite-manifest.js
+│   │   ├── middleware-build-manifest.js
+│   │   ├── middleware-manifest.json
+│   │   ├── middleware-react-loadable-manifest.js
+│   │   ├── next-font-manifest.js
+│   │   ├── next-font-manifest.json
+│   │   ├── pages-manifest.json
+│   │   ├── server-reference-manifest.js
+│   │   ├── server-reference-manifest.json
+│   │   ├── vendor-chunks
+│   │   │   ├── @radix-ui+react-compose-refs@1.1.2_@types+react@18.0.0_react@18.0.0.js
+│   │   │   ├── @radix-ui+react-slot@1.2.3_@types+react@18.0.0_react@18.0.0.js
+│   │   │   ├── @supabase+auth-js@2.76.1.js
+│   │   │   ├── @supabase+functions-js@2.76.1.js
+│   │   │   ├── @supabase+node-fetch@2.6.15.js
+│   │   │   ├── @supabase+postgrest-js@2.76.1.js
+│   │   │   ├── @supabase+realtime-js@2.76.1.js
+│   │   │   ├── @supabase+storage-js@2.76.1.js
+│   │   │   ├── @supabase+supabase-js@2.76.1.js
+│   │   │   ├── @swc+helpers@0.5.5.js
+│   │   │   ├── @vercel+analytics@1.5.0_@remix-run+react@2.17.0_react-dom@18.0.0_react@18.0.0__react@18_7f01825718d8d04b3925ce726601619a.js
+│   │   │   ├── class-variance-authority@0.7.1.js
+│   │   │   ├── clsx@2.1.1.js
+│   │   │   ├── geist@1.5.1_next@14.2.16_react-dom@18.0.0_react@18.0.0__react@18.0.0_.js
+│   │   │   ├── lucide-react@0.454.0_react@18.0.0.js
+│   │   │   ├── next@14.2.16_react-dom@18.0.0_react@18.0.0__react@18.0.0.js
+│   │   │   ├── tailwind-merge@2.5.5.js
+│   │   │   ├── tr46@0.0.3.js
+│   │   │   ├── tslib@2.8.1.js
+│   │   │   ├── webidl-conversions@3.0.1.js
+│   │   │   └── whatwg-url@5.0.0.js
+│   │   └── webpack-runtime.js
+│   ├── static
+│   │   ├── chunks
+│   │   │   ├── app
+│   │   │   │   ├── _not-found
+│   │   │   │   │   └── page.js
+│   │   │   │   ├── layout.js
+│   │   │   │   └── page.js
+│   │   │   ├── app-pages-internals.js
+│   │   │   ├── main-app.js
+│   │   │   ├── polyfills.js
+│   │   │   └── webpack.js
+│   │   ├── css
+│   │   │   └── app
+│   │   │       └── layout.css
+│   │   ├── development
+│   │   │   ├── _buildManifest.js
+│   │   │   └── _ssgManifest.js
+│   │   ├── media
+│   │   │   ├── 028c0d39d2e8f589-s.p.woff2
+│   │   │   └── 5b01f339abf2f1a5.p.woff2
+│   │   └── webpack
+│   │       ├── 10a639ef9a3dc300.webpack.hot-update.json
+│   │       ├── 288fa007d2ca398c.webpack.hot-update.json
+│   │       ├── 2eaf3875d552a408.webpack.hot-update.json
+│   │       ├── 408c3b46e6fba054.webpack.hot-update.json
+│   │       ├── 491da416f88cac1a.webpack.hot-update.json
+│   │       ├── 4d81a45f71bb25d0.webpack.hot-update.json
+│   │       ├── 633457081244afec._.hot-update.json
+│   │       ├── 63720979a011b754.webpack.hot-update.json
+│   │       ├── 68ac2b8be06f38db.webpack.hot-update.json
+│   │       ├── 81db22a97239fa2b.webpack.hot-update.json
+│   │       ├── 9bc3f3f2c299a401.webpack.hot-update.json
+│   │       ├── app
+│   │       │   ├── layout.10a639ef9a3dc300.hot-update.js
+│   │       │   ├── layout.288fa007d2ca398c.hot-update.js
+│   │       │   ├── layout.2eaf3875d552a408.hot-update.js
+│   │       │   ├── layout.408c3b46e6fba054.hot-update.js
+│   │       │   ├── layout.491da416f88cac1a.hot-update.js
+│   │       │   ├── layout.63720979a011b754.hot-update.js
+│   │       │   ├── layout.68ac2b8be06f38db.hot-update.js
+│   │       │   ├── layout.81db22a97239fa2b.hot-update.js
+│   │       │   ├── layout.9bc3f3f2c299a401.hot-update.js
+│   │       │   ├── layout.b6768f689cbfac7c.hot-update.js
+│   │       │   ├── layout.c599fde22b26d5f0.hot-update.js
+│   │       │   ├── layout.c93dbd73f8953e2a.hot-update.js
+│   │       │   ├── layout.e991dd9cefe5f2fa.hot-update.js
+│   │       │   ├── page.10a639ef9a3dc300.hot-update.js
+│   │       │   ├── page.288fa007d2ca398c.hot-update.js
+│   │       │   ├── page.408c3b46e6fba054.hot-update.js
+│   │       │   ├── page.491da416f88cac1a.hot-update.js
+│   │       │   ├── page.63720979a011b754.hot-update.js
+│   │       │   ├── page.81db22a97239fa2b.hot-update.js
+│   │       │   ├── page.9bc3f3f2c299a401.hot-update.js
+│   │       │   ├── page.b6768f689cbfac7c.hot-update.js
+│   │       │   ├── page.c599fde22b26d5f0.hot-update.js
+│   │       │   ├── page.c93dbd73f8953e2a.hot-update.js
+│   │       │   └── page.e991dd9cefe5f2fa.hot-update.js
+│   │       ├── b6768f689cbfac7c.webpack.hot-update.json
+│   │       ├── c599fde22b26d5f0.webpack.hot-update.json
+│   │       ├── c93dbd73f8953e2a.webpack.hot-update.json
+│   │       ├── e991dd9cefe5f2fa.webpack.hot-update.json
+│   │       ├── webpack.10a639ef9a3dc300.hot-update.js
+│   │       ├── webpack.288fa007d2ca398c.hot-update.js
+│   │       ├── webpack.2eaf3875d552a408.hot-update.js
+│   │       ├── webpack.408c3b46e6fba054.hot-update.js
+│   │       ├── webpack.491da416f88cac1a.hot-update.js
+│   │       ├── webpack.4d81a45f71bb25d0.hot-update.js
+│   │       ├── webpack.63720979a011b754.hot-update.js
+│   │       ├── webpack.68ac2b8be06f38db.hot-update.js
+│   │       ├── webpack.81db22a97239fa2b.hot-update.js
+│   │       ├── webpack.9bc3f3f2c299a401.hot-update.js
+│   │       ├── webpack.b6768f689cbfac7c.hot-update.js
+│   │       ├── webpack.c599fde22b26d5f0.hot-update.js
+│   │       ├── webpack.c93dbd73f8953e2a.hot-update.js
+│   │       └── webpack.e991dd9cefe5f2fa.hot-update.js
+│   ├── trace
+│   └── types
+│       ├── app
+│       │   ├── layout.ts
+│       │   └── page.ts
+│       └── package.json
+├── EMAIL_SETUP.md
+├── README.md
+├── __tests__
+│   └── buyer-dashboard.test.tsx
+├── app
+│   ├── admin-dashboard
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── auth
+│   │   └── callback
+│   │       └── page.tsx
+│   ├── buyer-dashboard
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── buyer-portal
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── cart
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── financial-dashboard
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── forgot-password
+│   │   └── page.tsx
+│   ├── globals.css
+│   ├── invoices
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── layout.tsx
+│   ├── login
+│   │   └── page.tsx
+│   ├── orders
+│   │   └── [id]
+│   │       ├── loading.tsx
+│   │       └── page.tsx
+│   ├── page.tsx
+│   ├── payment
+│   │   └── [id]
+│   │       ├── loading.tsx
+│   │       └── page.tsx
+│   ├── register
+│   │   ├── loading.tsx
+│   │   └── page.tsx
+│   ├── reset-password
+│   │   └── page.tsx
+│   ├── supplier-dashboard
+│   │   └── page.tsx
+│   └── test-supabase
+│       └── page.tsx
+├── components
+│   ├── auth-debugger.tsx
+│   ├── auth-provider.tsx
+│   ├── confirmation-modal.tsx
+│   ├── route-guard.tsx
+│   ├── theme-provider.tsx
+│   └── ui
+│       ├── alert.tsx
+│       ├── avatar.tsx
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── checkbox.tsx
+│       ├── dialog.tsx
+│       ├── dropdown-menu.tsx
+│       ├── input.tsx
+│       ├── label.tsx
+│       ├── progress.tsx
+│       ├── select.tsx
+│       ├── separator.tsx
+│       ├── table.tsx
+│       ├── tabs.tsx
+│       └── textarea.tsx
+├── components.json
+├── hooks
+│   └── useRealTimeUpdates.ts
+├── lib
+│   ├── logger.ts
+│   ├── supabaseClient.ts
+│   └── utils.ts
+├── next-env.d.ts
+├── next.config.mjs
+├── package.json
+├── pnpm-lock.yaml
+├── postcss.config.mjs
+├── project-tree.txt
+├── public
+│   ├── a4-copy-paper.jpg
+│   ├── assets
+│   │   └── images
+│   │       └── logo
+│   │           ├── logo1.png
+│   │           ├── logo2_blue_bg.JPG
+│   │           ├── logo_no_bg.png
+│   │           ├── logo_white_bg.JPG
+│   │           ├── v1.png
+│   │           └── viquoe_banner.JPG
+│   ├── automatic-sanitizer-dispenser.jpg
+│   ├── canon-ink-cartridge.jpg
+│   ├── dell-desktop-computer.jpg
+│   ├── diverse-products-still-life.png
+│   ├── executive-office-chair.jpg
+│   ├── hp-laser-printer.jpg
+│   ├── hp-printer.png
+│   ├── placeholder-logo.png
+│   ├── placeholder-logo.svg
+│   ├── placeholder-user.jpg
+│   ├── placeholder.jpg
+│   └── placeholder.svg
+├── styles
+│   └── globals.css
+└── tsconfig.json
+
+55 directories, 266 files
