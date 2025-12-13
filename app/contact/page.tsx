@@ -608,7 +608,7 @@ export default function ContactPage() {
               <CardContent>
                 <div className="space-y-3">
                   <a 
-                    href="mailto:hello@viquoe.com" 
+                    href="mailto:nelson.ejimadu@viquoe.com" 
                     className="text-primary hover:underline font-medium block"
                   >
                     contact@viquoe.com
@@ -674,7 +674,7 @@ export default function ContactPage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <img 
-                  src="/assets/images/logo/v1.jpg" 
+                  src="/assets/images/logo/v1.png" 
                   alt="Viquoe Logo"
                   className="h-5 w-auto object-contain" 
                 />
