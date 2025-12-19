@@ -27,11 +27,36 @@ import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 
+// Interfaces for TypeScript
+interface FormData {
+  name: string;
+  email: string;
+  organization: string;
+  role: string;
+  phone: string;
+  orgType: string;
+  country: string;
+  challenges: string;
+  budget: string;
+}
+
+interface SupplierFormData {
+  contactName: string;
+  companyName: string;
+  companyEmail: string;
+  companyPhone: string;
+  website: string;
+  country: string;
+  yearsInBusiness: string;
+  description: string;
+  categories: string[];
+}
+
 export default function ContactPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
     organization: "",
@@ -43,6 +68,18 @@ export default function ContactPage() {
     budget: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [supplierFormData, setSupplierFormData] = useState<SupplierFormData>({
+    contactName: "",
+    companyName: "",
+    companyEmail: "",
+    companyPhone: "",
+    website: "",
+    country: "",
+    yearsInBusiness: "",
+    description: "",
+    categories: [],
+  })
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -67,36 +104,128 @@ export default function ContactPage() {
     return user.userType === "buyer" ? "/buyer-dashboard" : "/supplier-dashboard"
   }
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     
-    // Simulate form submission
-    setTimeout(() => {
-      console.log("Form submitted:", formData)
+    try {
+      // ACTUAL database insert
+      const { error } = await supabase
+        .from('institutional_partners')
+        .insert([{
+          name: formData.name,
+          organization: formData.organization,
+          role: formData.role,
+          email: formData.email,
+          phone: formData.phone,
+          org_type: formData.orgType,
+          country: formData.country,
+          challenges: formData.challenges,
+          budget: formData.budget || null,
+        }])
+
+      if (error) {
+        console.error('Error submitting form:', error)
+        alert('Failed to submit. Please try again.')
+      } else {
+        alert('Thank you! We\'ll contact you soon.')
+        setFormData({
+          name: "",
+          email: "",
+          organization: "",
+          role: "",
+          phone: "",
+          orgType: "",
+          country: "",
+          challenges: "",
+          budget: "",
+        })
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      alert('An error occurred. Please try again.')
+    } finally {
       setIsSubmitting(false)
-      alert("Thank you! We'll contact you soon.")
-      setFormData({
-        name: "",
-        email: "",
-        organization: "",
-        role: "",
-        phone: "",
-        orgType: "",
-        country: "",
-        challenges: "",
-        budget: "",
-      })
-    }, 1000)
+    }
+  }
+
+  const handleSupplierInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setSupplierFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSupplierSelectChange = (name: keyof SupplierFormData, value: string) => {
+    setSupplierFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleCheckboxChange = (category: string, checked: boolean) => {
+    setSupplierFormData(prev => ({
+      ...prev,
+      categories: checked 
+        ? [...prev.categories, category]
+        : prev.categories.filter(c => c !== category)
+    }))
+  }
+
+  const handleSupplierSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    try {
+      // Validate at least one category is selected
+      if (supplierFormData.categories.length === 0) {
+        alert('Please select at least one category')
+        setIsSubmitting(false)
+        return
+      }
+
+      const { error } = await supabase
+        .from('supplier_applications')
+        .insert([{
+          contact_name: supplierFormData.contactName,
+          company_name: supplierFormData.companyName,
+          company_email: supplierFormData.companyEmail,
+          company_phone: supplierFormData.companyPhone,
+          website: supplierFormData.website,
+          country: supplierFormData.country,
+          categories: supplierFormData.categories,
+          years_in_business: supplierFormData.yearsInBusiness,
+          description: supplierFormData.description,
+          status: 'pending',
+        }])
+
+      if (error) {
+        console.error('Error submitting supplier application:', error)
+        alert('Failed to submit application. Please try again.')
+      } else {
+        alert('Application submitted! We\'ll review it within 3-5 business days.')
+        setSupplierFormData({
+          contactName: "",
+          companyName: "",
+          companyEmail: "",
+          companyPhone: "",
+          website: "",
+          country: "",
+          yearsInBusiness: "",
+          description: "",
+          categories: [],
+        })
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      alert('An error occurred. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const supplierCategories = [
@@ -263,15 +392,15 @@ export default function ContactPage() {
                   <div className="flex items-center space-x-3">
                     <Mail className="h-5 w-5 text-muted-foreground" />
                     <a 
-                      href="mailto:partners@viquoe.com" 
+                      href="mailto:network@viquoe.com" 
                       className="text-primary hover:underline font-medium"
                     >
-                      partners@viquoe.com
+                      network@viquoe.com
                     </a>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Phone className="h-5 w-5 text-muted-foreground" />
-                    <span className="font-medium">+[Country Code] [XXX-XXX-XXXX]</span>
+                    <span className="font-medium">+2348135293150</span>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -451,10 +580,10 @@ export default function ContactPage() {
                   <div className="flex items-center space-x-3">
                     <Mail className="h-5 w-5 text-muted-foreground" />
                     <a 
-                      href="mailto:suppliers@viquoe.com" 
+                      href="mailto:network@viquoe.com" 
                       className="text-secondary hover:underline font-medium"
                     >
-                      suppliers@viquoe.com
+                      network@viquoe.com
                     </a>
                   </div>
                 </div>
@@ -463,33 +592,74 @@ export default function ContactPage() {
                 </p>
                 <div className="pt-4">
                   <h4 className="font-semibold mb-4 text-lg">Supplier Pre-Verification Application</h4>
-                  <form className="space-y-4">
+                  <form onSubmit={handleSupplierSubmit} className="space-y-4">
                     <div className="grid gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="supplierName">Contact Person Name *</Label>
-                        <Input id="supplierName" placeholder="Jane Smith" required />
+                        <Input
+                          id="supplierName"
+                          name="contactName"
+                          value={supplierFormData.contactName}
+                          onChange={handleSupplierInputChange}
+                          placeholder="Jane Smith"
+                          required
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="companyName">Company/Business Name *</Label>
-                        <Input id="companyName" placeholder="Your Company Ltd" required />
+                        <Input
+                          id="companyName"
+                          name="companyName"
+                          value={supplierFormData.companyName}
+                          onChange={handleSupplierInputChange}
+                          placeholder="Your Company Ltd"
+                          required
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="companyEmail">Official Company Email *</Label>
-                          <Input id="companyEmail" type="email" placeholder="contact@company.com" required />
+                          <Input
+                            id="companyEmail"
+                            name="companyEmail"
+                            type="email"
+                            value={supplierFormData.companyEmail}
+                            onChange={handleSupplierInputChange}
+                            placeholder="contact@company.com"
+                            required
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="companyPhone">Phone Number *</Label>
-                          <Input id="companyPhone" type="tel" placeholder="+XXX XXX XXX XXX" required />
+                          <Input
+                            id="companyPhone"
+                            name="companyPhone"
+                            type="tel"
+                            value={supplierFormData.companyPhone}
+                            onChange={handleSupplierInputChange}
+                            placeholder="+XXX XXX XXX XXX"
+                            required
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="website">Company Website *</Label>
-                        <Input id="website" type="url" placeholder="https://yourcompany.com" required />
+                        <Input
+                          id="website"
+                          name="website"
+                          type="url"
+                          value={supplierFormData.website}
+                          onChange={handleSupplierInputChange}
+                          placeholder="https://yourcompany.com"
+                          required
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="supplierCountry">Country of Registration *</Label>
-                        <Select>
+                        <Select
+                          value={supplierFormData.country}
+                          onValueChange={(value) => handleSupplierSelectChange("country", value)}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select country" />
                           </SelectTrigger>
@@ -507,7 +677,13 @@ export default function ContactPage() {
                         <div className="grid grid-cols-2 gap-2">
                           {supplierCategories.slice(0, 6).map((category) => (
                             <div key={category} className="flex items-center space-x-2">
-                              <Checkbox id={category} />
+                              <Checkbox
+                                id={category}
+                                checked={supplierFormData.categories.includes(category)}
+                                onCheckedChange={(checked) =>
+                                  handleCheckboxChange(category, checked as boolean)
+                                }
+                              />
                               <label
                                 htmlFor={category}
                                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
@@ -520,7 +696,10 @@ export default function ContactPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="yearsInBusiness">Years in Business *</Label>
-                        <Select>
+                        <Select
+                          value={supplierFormData.yearsInBusiness}
+                          onValueChange={(value) => handleSupplierSelectChange("yearsInBusiness", value)}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select years" />
                           </SelectTrigger>
@@ -536,6 +715,9 @@ export default function ContactPage() {
                         <Label htmlFor="description">Brief company description & reason for interest *</Label>
                         <Textarea
                           id="description"
+                          name="description"
+                          value={supplierFormData.description}
+                          onChange={handleSupplierInputChange}
                           placeholder="Tell us about your company and why you want to join Viquoe..."
                           rows={3}
                           required
@@ -543,11 +725,12 @@ export default function ContactPage() {
                       </div>
                     </div>
 
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                      disabled={isSubmitting}
                     >
-                      Submit for Review
+                      {isSubmitting ? "Submitting..." : "Submit for Review"}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                     <p className="text-xs text-muted-foreground text-center">
@@ -608,8 +791,8 @@ export default function ContactPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <a 
-                    href="mailto:nelson.ejimadu@viquoe.com" 
+                  <a
+                    href="mailto:hello@viquoe.com"
                     className="text-primary hover:underline font-medium block"
                   >
                     contact@viquoe.com
@@ -674,10 +857,10 @@ export default function ContactPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <img 
-                  src="/assets/images/logo/v1.png" 
+                <img
+                  src="/assets/images/logo/v1.jpg"
                   alt="Viquoe Logo"
-                  className="h-5 w-auto object-contain" 
+                  className="h-5 w-auto object-contain"
                 />
               </div>
               <p className="text-muted-foreground text-sm">Streamlining institutional procurement across Africa</p>
