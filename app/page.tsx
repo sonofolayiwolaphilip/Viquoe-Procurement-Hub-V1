@@ -420,9 +420,11 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8 pt-0">
-                <Button className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  Explore Category
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button asChild className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
+                  <Link href="/buyer-portal?category=office-supplies">
+                    Explore Category
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -438,9 +440,11 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8 pt-0">
-                <Button className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  Explore Category
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button asChild className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
+                  <Link href="/buyer-portal?category=it-equipment">
+                    Explore Category
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -456,9 +460,11 @@ export default function HomePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8 pt-0">
-                <Button className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  Explore Category
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button asChild className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-semibold hover:bg-primary/90 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl">
+                  <Link href="/buyer-portal?category=facility-materials">
+                    Explore Category
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
               </CardContent>
             </Card>

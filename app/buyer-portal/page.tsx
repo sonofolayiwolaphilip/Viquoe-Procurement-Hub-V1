@@ -18,7 +18,7 @@ import {
 import { Search, Filter, ShoppingCart, Star, Package, Truck, Shield, CheckCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/components/auth-provider"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import Image from "next/image"
 
@@ -271,6 +271,22 @@ export default function BuyerPortal() {
       loadCartCount()
     }
   }, [isAuthenticated, user?.id])
+
+  // If a category query param is present, set it as the selected category
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    try {
+      const param = searchParams?.get("category")
+      if (!param) return
+      // Convert slug-like param to label: "office-supplies" -> "Office Supplies"
+      const label = param.includes("-")
+        ? param.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+        : param
+      setSelectedCategory(label)
+    } catch (err) {
+      console.error("Error parsing category param:", err)
+    }
+  }, [searchParams])
 
   const loadCartCount = async () => {
     if (!user?.id) return
