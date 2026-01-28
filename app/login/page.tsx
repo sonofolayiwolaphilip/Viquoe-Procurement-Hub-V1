@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Building2, Store, Shield, ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { Building2, Store, Shield, ArrowLeft, Eye, EyeOff, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<UserType>("buyer")
+  const [showAdminPopup, setShowAdminPopup] = useState(false)
   const router = useRouter()
 
   // Email validation
@@ -102,6 +103,19 @@ export default function LoginPage() {
         return
       }
 
+      // For admin login, check for admin role specifically
+      if (userType === "admin") {
+        // You might want to add additional admin role checks here
+        // For example, check if user is in an admin table or has admin role in metadata
+        const isAdmin = userMeta?.role === "admin" || userMeta?.userType === "admin"
+        if (!isAdmin) {
+          await supabase.auth.signOut()
+          setError("You don't have admin privileges. Please use the regular login.")
+          setIsLoading(false)
+          return
+        }
+      }
+
       // Redirect based on user type
       switch (userType) {
         case "buyer":
@@ -132,6 +146,14 @@ export default function LoginPage() {
     }
   }
 
+  // Handle admin link click
+  const handleAdminLinkClick = () => {
+    setShowAdminPopup(true)
+    setEmail("")
+    setPassword("")
+    setError("")
+  }
+
   return (
     <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -155,18 +177,14 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="buyer" className="text-xs" disabled={isLoading}>
-                  <Building2 className="h-4 w-4 mr-1" />
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="buyer" className="text-sm" disabled={isLoading}>
+                  <Building2 className="h-4 w-4 mr-2" />
                   Buyer
                 </TabsTrigger>
-                <TabsTrigger value="supplier" className="text-xs" disabled={isLoading}>
-                  <Store className="h-4 w-4 mr-1" />
+                <TabsTrigger value="supplier" className="text-sm" disabled={isLoading}>
+                  <Store className="h-4 w-4 mr-2" />
                   Supplier
-                </TabsTrigger>
-                <TabsTrigger value="admin" className="text-xs" disabled={isLoading}>
-                  <Shield className="h-4 w-4 mr-1" />
-                  Admin
                 </TabsTrigger>
               </TabsList>
 
@@ -273,60 +291,129 @@ export default function LoginPage() {
                   </Link>
                 </p>
               </TabsContent>
-
-              <TabsContent value="admin" className="space-y-4 mt-6">
-                <form onSubmit={(e) => handleLogin(e, "admin")}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-email">Admin Email <span className="text-red-500">*</span></Label>
-                      <Input
-                        id="admin-email"
-                        type="email"
-                        placeholder="admin@viquoe.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        disabled={isLoading}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-password">Password <span className="text-red-500">*</span></Label>
-                      <div className="relative">
-                        <Input
-                          id="admin-password"
-                          type={showPassword ? "text" : "password"}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          disabled={isLoading}
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          disabled={isLoading}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Signing In..." : "Sign In as Admin"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
             </Tabs>
 
-            <div className="mt-6 text-center">
-              <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground">
-                Forgot your password?
-              </Link>
+            <div className="mt-6 pt-6 border-t">
+              <div className="text-center">
+                <button
+                  onClick={handleAdminLinkClick}
+                  className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  Admin Login
+                </button>
+              </div>
+              <div className="mt-4 text-center">
+                <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground">
+                  Forgot your password?
+                </Link>
+              </div>
             </div>
-
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Login Popup */}
+      {showAdminPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md shadow-2xl">
+            <CardHeader className="relative">
+              <button
+                onClick={() => setShowAdminPopup(false)}
+                className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-center justify-center space-x-2 mb-4">
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                  <Shield className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <span className="text-xl font-bold">Viquoe</span>
+              </div>
+              <CardTitle className="text-center">Admin Portal</CardTitle>
+              <CardDescription className="text-center">
+                Restricted access for administrators only
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <form onSubmit={(e) => {
+                handleLogin(e, "admin")
+                // Don't close popup on submit - let the redirect handle it
+              }}>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-email">Admin Email <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      placeholder="admin@viquoe.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-password">Password <span className="text-red-500">*</span></Label>
+                    <div className="relative">
+                      <Input
+                        id="admin-password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={isLoading}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        disabled={isLoading}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setShowAdminPopup(false)}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={isLoading}>
+                      {isLoading ? (
+                        <>
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        "Sign In as Admin"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+
+              <div className="mt-6 pt-4 border-t">
+                <p className="text-xs text-center text-muted-foreground">
+                  This area is restricted to authorized personnel only.
+                  Unauthorized access attempts will be logged.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
