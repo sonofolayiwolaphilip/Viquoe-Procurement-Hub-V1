@@ -47,7 +47,8 @@ export default function ForgotPasswordPage() {
     try {
       // Get the current origin
       const origin = window.location.origin
-      const redirectTo = `${origin}/auth/callback`
+      // CHANGE THIS LINE: Point directly to reset-password instead of auth/callback
+      const redirectTo = `${origin}/reset-password`
       
       console.log('Password reset attempt:', {
         email: email.trim(),

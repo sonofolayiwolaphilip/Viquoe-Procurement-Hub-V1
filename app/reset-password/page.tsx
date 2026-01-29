@@ -29,6 +29,12 @@ export default function ResetPasswordPage() {
 
   const checkSession = async () => {
     try {
+      // First check if there's a token in the URL hash (from email link)
+      if (typeof window !== 'undefined' && window.location.hash) {
+        await extractTokenFromUrl()
+      }
+      
+      // Then check for session
       const { data: { session } } = await supabase.auth.getSession()
       setHasValidSession(!!session)
       
@@ -38,6 +44,45 @@ export default function ResetPasswordPage() {
     } catch (err) {
       console.error("Session check error:", err)
       setError("An error occurred while verifying your session.")
+    }
+  }
+
+  // NEW FUNCTION: Extract token from URL hash and set session
+  const extractTokenFromUrl = async () => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      if (hash) {
+        try {
+          // Parse the hash parameters (format: #access_token=xxx&refresh_token=yyy...)
+          const params = new URLSearchParams(hash.substring(1))
+          const access_token = params.get('access_token')
+          const refresh_token = params.get('refresh_token')
+          
+          if (access_token) {
+            console.log("Found access token in URL, setting session...")
+            
+            // Set the session using the token from URL
+            const { data: { session }, error } = await supabase.auth.setSession({
+              access_token,
+              refresh_token
+            })
+            
+            if (error) {
+              console.error("Error setting session from URL token:", error)
+              return
+            }
+            
+            if (session) {
+              console.log("Session successfully set from URL token")
+              setHasValidSession(true)
+              // Clear the hash from URL for security and cleaner UI
+              window.history.replaceState(null, '', window.location.pathname)
+            }
+          }
+        } catch (err) {
+          console.error('Error extracting token from URL:', err)
+        }
+      }
     }
   }
 
