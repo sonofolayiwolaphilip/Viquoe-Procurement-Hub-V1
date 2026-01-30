@@ -165,16 +165,16 @@ export default function HomePage() {
               </Badge>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground mb-8 text-balance">
-              Built from {" "} 
+              One {" "} 
               <span className="text-primary relative">
-                Africa,
+                Platform.
                 <div className="absolute -bottom-0.5 left-0 w-full h-1 bg-gradient-to-r from-secondary to-accent rounded-full"></div>
               </span>
               <br />
               <span className="bg-gradient-to-r from-primary via-primary/80 to-secondary bg-clip-text text-transparent">
-                designed for Emerging Markets
+                Smarter Procurement.
               </span>{" "}
-              & global Commerce
+              Global Scale.
             </h1>
             <p className="text-lg md:text-xl lg:text-2xl font-medium text-muted-foreground mb-12 text-pretty leading-relaxed max-w-4xl mx-auto">
               Experience the future of institutional procurement with AI-powered supplier matching, revolutionary

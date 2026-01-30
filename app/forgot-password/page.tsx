@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, CheckCircle, Mail, AlertCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle, Mail } from "lucide-react"
 import Link from "next/link"
 
 export default function ForgotPasswordPage() {
@@ -15,7 +15,6 @@ export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const [debugInfo, setDebugInfo] = useState("")
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -30,7 +29,6 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
     setError("")
     setSuccess(false)
-    setDebugInfo("")
 
     if (!email.trim()) {
       setError("Email is required")
@@ -45,38 +43,10 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      // Get the current origin - this should be https://fluffy-dollop-4vrr9g7v7962jgg4.github.dev
       const origin = window.location.origin
-      
-      // Make sure this matches EXACTLY what's in Supabase Redirect URLs
       const redirectTo = `${origin}/reset-password`
       
-      console.log('🔐 CURRENT ENVIRONMENT:', {
-        email: email.trim(),
-        redirectTo,
-        origin,
-        fullUrl: window.location.href,
-        isGitHubCodespace: window.location.hostname.includes('github.dev'),
-        timestamp: new Date().toISOString()
-      })
-
-      // Show the exact URL that needs to be in Supabase
-      setDebugInfo(`📧 Email: ${email.trim()}
-🔗 Redirect URL being used: ${redirectTo}
-🌐 Current origin: ${origin}
-🏷️ Environment: GitHub Codespaces
-
-⚠️ REQUIRED ACTION:
-Add this EXACT URL to Supabase Dashboard:
-${redirectTo}
-
-📋 Complete Supabase Redirect URLs needed:
-1. ${origin}/reset-password
-2. ${origin}/auth/callback
-3. http://localhost:3000/reset-password
-4. http://localhost:3000/auth/callback
-5. https://www.viquoe.com/reset-password
-6. https://www.viquoe.com/auth/callback`)
+      console.log('Sending password reset to:', email.trim())
 
       const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
@@ -85,46 +55,26 @@ ${redirectTo}
         }
       )
 
-      console.log('📨 Reset response:', { data, error: resetError })
-
       if (resetError) {
-        console.error('❌ Reset error details:', resetError)
-        let detailedError = `❌ Error: ${resetError.message}\n📊 Status: ${resetError.status}`
+        console.error('Reset error:', resetError)
         
-        // Add specific troubleshooting based on error
-        if (resetError.message.toLowerCase().includes('redirect')) {
-          detailedError += `\n\n🔧 FIX REQUIRED:\nAdd this EXACT URL to Supabase Redirect URLs:\n${redirectTo}\n\nCurrent environment: ${origin}`
-          setError(`Redirect URL configuration error. The URL ${redirectTo} needs to be added to Supabase.`)
-        } else if (resetError.message.includes('email') || resetError.status === 403) {
-          detailedError += `\n\nℹ️ This usually means the email isn't registered or email confirmation is required.`
+        if (resetError.message.includes('email')) {
           setError("If an account exists with this email, you'll receive a reset link.")
         } else if (resetError.status === 429) {
-          detailedError += `\n\n⏳ Rate limited. Wait a few minutes.`
           setError("Too many attempts. Please wait a few minutes before trying again.")
         } else {
-          detailedError += `\n\n🔧 Check Supabase Dashboard configuration.`
-          setError(`Failed to send reset email: ${resetError.message}`)
+          setError("Failed to send reset email. Please try again.")
         }
-        
-        setDebugInfo(detailedError)
         setIsLoading(false)
         return
       }
 
-      // Success!
       setSuccess(true)
-      setDebugInfo(`✅ Success! Email sent to: ${email.trim()}
-🔗 The link will point to: ${redirectTo}
-⏳ Link expires in 24 hours
-📁 Check spam folder if not received
-💡 Make sure ${redirectTo} is in Supabase Redirect URLs!`)
-      
-      console.log('✅ Password reset email sent successfully')
+      console.log('Password reset email sent successfully')
       
     } catch (err) {
-      console.error("❌ Password reset error:", err)
+      console.error("Password reset error:", err)
       setError("An unexpected error occurred. Please try again.")
-      setDebugInfo(`❌ Exception: ${err}`)
     } finally {
       setIsLoading(false)
     }
@@ -154,16 +104,6 @@ ${redirectTo}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Debug info - remove in production */}
-            {debugInfo && (
-              <Alert className="mb-4 bg-blue-50">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs font-mono whitespace-pre-line">
-                  {debugInfo}
-                </AlertDescription>
-              </Alert>
-            )}
-
             {success ? (
               <div className="text-center space-y-4">
                 <div className="flex justify-center">
@@ -180,12 +120,12 @@ ${redirectTo}
                 </div>
                 
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left">
-                  <h4 className="font-semibold text-amber-800 text-sm mb-2">Important Check</h4>
+                  <h4 className="font-semibold text-amber-800 text-sm mb-2">Troubleshooting</h4>
                   <ul className="text-xs text-amber-700 space-y-1">
-                    <li>• Make sure this URL is in Supabase: {window.location.origin}/reset-password</li>
                     <li>• Check your spam or junk folder</li>
                     <li>• Verify you entered the correct email address</li>
                     <li>• Wait a few minutes - emails may be delayed</li>
+                    <li>• Contact support if you continue having issues</li>
                   </ul>
                 </div>
 
@@ -198,7 +138,6 @@ ${redirectTo}
                     onClick={() => {
                       setSuccess(false)
                       setEmail("")
-                      setDebugInfo("")
                     }}
                     className="w-full"
                   >
