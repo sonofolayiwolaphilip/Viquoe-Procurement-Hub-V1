@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +29,46 @@ export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  // Handle password reset tokens from email links
+  useEffect(() => {
+    const handleResetTokens = async () => {
+      // Check for password reset tokens in URL hash
+      if (window.location.hash) {
+        const hash = window.location.hash.substring(1)
+        const params = new URLSearchParams(hash)
+        const access_token = params.get('access_token')
+        const type = params.get('type')
+
+        // If this is a password reset link
+        if (access_token && type === 'recovery') {
+          console.log('🚨 DETECTED PASSWORD RESET TOKENS ON HOME PAGE')
+          
+          try {
+            // Clear the hash from URL immediately
+            window.history.replaceState(null, '', '/')
+            
+            // Set the session from tokens
+            const { data: { session }, error } = await supabase.auth.setSession({
+              access_token,
+              refresh_token: params.get('refresh_token') || ''
+            })
+
+            if (session) {
+              console.log('✅ Session created from reset tokens, redirecting to reset-password')
+              // Redirect to reset password page
+              router.push('/reset-password')
+              return
+            }
+          } catch (err) {
+            console.error('❌ Error handling reset tokens:', err)
+          }
+        }
+      }
+    }
+
+    handleResetTokens()
+  }, [router])
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
