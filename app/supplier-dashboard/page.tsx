@@ -594,7 +594,7 @@ export default function SupplierDashboard() {
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="" disabled>No categories available</SelectItem>
+                              <SelectItem value="no-categories" disabled>No categories available</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
