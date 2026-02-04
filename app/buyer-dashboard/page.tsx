@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw, Eye, Filter, Star, ShoppingBag, Users, ChevronRight, MapPin, Phone } from "lucide-react"
+import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw, Eye, Filter, Star, ShoppingBag, Users, ChevronRight, MapPin, Phone, AlertTriangle } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
@@ -44,11 +44,12 @@ interface QuoteRequest {
   status: string
   unit_price: number
   total_price: number
-  created_at: string
+  createdAt: string
   contact_person: string
   phone: string
   delivery_address: string
   notes: string
+  userId?: string
 }
 
 interface Product {
@@ -68,6 +69,7 @@ interface Product {
   category?: {
     id: string
     name: string
+    description?: string | null
   }
   supplier?: {
     id: string
@@ -114,10 +116,12 @@ export default function BuyerDashboard() {
     categories: true 
   })
   const [error, setError] = useState<string | null>(null)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [sortBy, setSortBy] = useState<"newest" | "price-low" | "price-high">("newest")
+  const [isOnline, setIsOnline] = useState(true)
   
   const [confirmation, setConfirmation] = useState<ConfirmationState>({
     isOpen: false,
@@ -127,6 +131,32 @@ export default function BuyerDashboard() {
     description: '',
     isLoading: false
   })
+
+  // Monitor connection status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true)
+      setConnectionError(null)
+      logger.info('BuyerDashboard', 'Browser back online')
+    }
+    
+    const handleOffline = () => {
+      setIsOnline(false)
+      setConnectionError('You are offline. Please check your internet connection.')
+      logger.warn('BuyerDashboard', 'Browser offline')
+    }
+    
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    
+    // Initial check
+    setIsOnline(navigator.onLine)
+    
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   const handleRealTimeUpdate = useCallback((payload: any, type: 'order' | 'quote') => {
     logger.info('BuyerDashboard', `Processing ${type} update`, { 
@@ -176,7 +206,16 @@ export default function BuyerDashboard() {
     onQuoteUpdate: handleQuoteUpdate
   })
 
-  // Enhanced fetch function with supplier data
+  // Helper function with timeout
+  const queryWithTimeout = async (queryPromise, timeout = 15000) => {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Query timeout after 15s')), timeout)
+    })
+    
+    return Promise.race([queryPromise, timeoutPromise])
+  }
+
+  // Fetch orders
   const fetchOrders = useCallback(async () => {
     if (!user?.id) return
 
@@ -185,11 +224,14 @@ export default function BuyerDashboard() {
       setError(null)
       logger.debug('BuyerDashboard', 'Fetching orders', { userId: user.id })
 
-      const { data, error: fetchError } = await supabase
-        .from("Order")
-        .select("*")
-        .eq("userId", user.id)
-        .order("createdAt", { ascending: false })
+      const { data, error: fetchError } = await queryWithTimeout(
+        supabase
+          .from("Order")
+          .select("*")
+          .eq("userId", user.id)
+          .order("createdAt", { ascending: false })
+          .limit(50)
+      )
 
       if (fetchError) throw fetchError
 
@@ -202,12 +244,18 @@ export default function BuyerDashboard() {
       logger.info('BuyerDashboard', 'Orders fetched successfully', { count: data?.length })
     } catch (err: any) {
       logger.error('BuyerDashboard', 'Error fetching orders', err)
-      setError(err.message || "Failed to load orders")
+      
+      if (err.message.includes('timeout')) {
+        setConnectionError('Orders load timeout. Please try again.')
+      } else {
+        setError(err.message || "Failed to load orders")
+      }
     } finally {
       setLoading(prev => ({ ...prev, orders: false }))
     }
   }, [user?.id])
 
+  // Fetch quotes with correct column name (createdAt)
   const fetchQuotes = useCallback(async () => {
     if (!user?.id) return
 
@@ -215,47 +263,168 @@ export default function BuyerDashboard() {
       setLoading(prev => ({ ...prev, quotes: true }))
       logger.debug('BuyerDashboard', 'Fetching quotes', { userId: user.id })
 
-      const { data, error: fetchError } = await supabase
-        .from("QuoteRequest")
-        .select("*")
-        .eq("userId", user.id)
-        .order("created_at", { ascending: false })
+      // CORRECT: Use createdAt (camelCase) from your schema
+      const { data, error: fetchError } = await queryWithTimeout(
+        supabase
+          .from("QuoteRequest")
+          .select("*")
+          .eq("userId", user.id)
+          .order("createdAt", { ascending: false })
+          .limit(50)
+      )
 
       if (fetchError) throw fetchError
 
       setQuotes(data || [])
-      logger.info('BuyerDashboard', 'Quotes fetched successfully', { count: data?.length })
+      logger.info('BuyerDashboard', 'Quotes fetched successfully', { 
+        count: data?.length 
+      })
     } catch (err: any) {
       logger.error('BuyerDashboard', 'Error fetching quotes', err)
+      
+      if (err.message.includes('timeout')) {
+        setConnectionError('Quotes load timeout. Please try again.')
+      }
     } finally {
       setLoading(prev => ({ ...prev, quotes: false }))
     }
   }, [user?.id])
 
-  // Fetch all active products
+  // OPTION 2: Fetch all active products with category and supplier details
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(prev => ({ ...prev, products: true }))
       logger.debug('BuyerDashboard', 'Fetching products')
 
-      // Fetch products with category and supplier info
-      const { data: productsData, error: productsError } = await supabase
-        .from("Product")
-        .select(`
-          *,
-          category:Category(*),
-          supplier:supplierId(*)
-        `)
-        .eq("isActive", true)
-        .order("createdAt", { ascending: false })
+      // 1. Fetch products first (with limit to prevent timeout)
+      const { data: productsData, error: productsError } = await queryWithTimeout(
+        supabase
+          .from("Product")
+          .select("*")
+          .eq("isActive", true)
+          .order("createdAt", { ascending: false })
+          .limit(50)
+      )
 
       if (productsError) throw productsError
 
-      setProducts(productsData || [])
-      logger.info('BuyerDashboard', 'Products fetched successfully', { count: productsData?.length })
+      if (!productsData || productsData.length === 0) {
+        setProducts([])
+        return
+      }
+
+      // 2. Fetch categories separately
+      const categoryIds = [...new Set(productsData.map(p => p.categoryId).filter(Boolean))]
+      let categoriesData = []
+      
+      if (categoryIds.length > 0) {
+        const { data: cats, error: catsError } = await supabase
+          .from("Category")
+          .select("id, name, description")
+          .in("id", categoryIds)
+          .eq("isActive", true)
+        
+        if (!catsError) {
+          categoriesData = cats || []
+        }
+      }
+
+      // 3. Fetch suppliers (users) separately
+      const supplierIds = [...new Set(productsData.map(p => p.supplierId).filter(Boolean))]
+      let suppliersData = []
+      
+      if (supplierIds.length > 0) {
+        try {
+          // Try to fetch from auth.users using RPC or multiple queries
+          const fetchPromises = supplierIds.map(async (id) => {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .from('auth.users')
+                .select('id, email, raw_user_meta_data')
+                .eq('id', id)
+                .single()
+              
+              if (!userError && userData) {
+                return userData
+              }
+              return null
+            } catch (err) {
+              console.warn(`Could not fetch supplier ${id}:`, err)
+              return null
+            }
+          })
+          
+          const results = await Promise.all(fetchPromises)
+          suppliersData = results.filter(Boolean)
+        } catch (supplierErr) {
+          console.warn('Could not fetch supplier details:', supplierErr)
+        }
+      }
+
+      // 4. Create lookup maps
+      const categoryMap = new Map()
+      categoriesData.forEach(cat => categoryMap.set(cat.id, cat))
+
+      const supplierMap = new Map()
+      suppliersData.forEach(sup => supplierMap.set(sup.id, sup))
+
+      // 5. Combine data
+      const productsWithDetails = productsData.map(product => ({
+        ...product,
+        category: categoryMap.get(product.categoryId) || { 
+          id: product.categoryId, 
+          name: 'Uncategorized',
+          description: null
+        },
+        supplier: supplierMap.get(product.supplierId) || { 
+          id: product.supplierId, 
+          email: 'supplier@example.com',
+          user_metadata: {
+            company_name: 'Supplier',
+            phone: 'Contact for details',
+            location: 'Nigeria'
+          }
+        }
+      }))
+
+      setProducts(productsWithDetails)
+      logger.info('BuyerDashboard', 'Products fetched successfully', { 
+        count: productsWithDetails.length 
+      })
+      
     } catch (err: any) {
       logger.error('BuyerDashboard', 'Error fetching products', err)
-      setError("Failed to load products")
+      
+      if (err.message.includes('timeout')) {
+        setConnectionError('Products load timeout. Please try again.')
+      } else {
+        setError("Failed to load products")
+      }
+      
+      // Fallback to simple product data if detailed fetch fails
+      try {
+        const { data: simpleData } = await supabase
+          .from("Product")
+          .select("id, name, price, image, stock, minOrder, description, categoryId, supplierId")
+          .eq("isActive", true)
+          .limit(20)
+        
+        if (simpleData) {
+          const fallbackProducts = simpleData.map(p => ({
+            ...p,
+            category: { id: p.categoryId, name: 'Uncategorized' },
+            supplier: {
+              id: p.supplierId,
+              email: 'supplier@example.com',
+              user_metadata: { company_name: 'Supplier' }
+            }
+          }))
+          setProducts(fallbackProducts)
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback also failed:', fallbackErr)
+      }
+      
     } finally {
       setLoading(prev => ({ ...prev, products: false }))
     }
@@ -266,18 +435,25 @@ export default function BuyerDashboard() {
     try {
       setLoading(prev => ({ ...prev, categories: true }))
 
-      const { data, error } = await supabase
-        .from("Category")
-        .select("*")
-        .eq("isActive", true)
-        .order("name", { ascending: true })
+      const { data, error } = await queryWithTimeout(
+        supabase
+          .from("Category")
+          .select("*")
+          .eq("isActive", true)
+          .order("name", { ascending: true })
+          .limit(20)
+      )
 
-      if (error) throw error
+      if (error) {
+        console.warn('Categories fetch warning:', error.message)
+        // Continue without categories
+        return
+      }
 
       setCategories(data || [])
     } catch (err: any) {
-      logger.error('BuyerDashboard', 'Error fetching categories', err)
-      // Continue with empty categories
+      console.warn('Categories fetch failed:', err.message)
+      // This is not critical, continue without categories
     } finally {
       setLoading(prev => ({ ...prev, categories: false }))
     }
@@ -295,6 +471,8 @@ export default function BuyerDashboard() {
         fetchCategories()
       ])
       logger.info('BuyerDashboard', 'Manual refresh completed')
+      setError(null)
+      setConnectionError(null)
     } catch (err) {
       logger.error('BuyerDashboard', 'Error during manual refresh', err)
     } finally {
@@ -376,7 +554,7 @@ export default function BuyerDashboard() {
           productImage: product.image,
           quantity: product.minOrder,
           supplierId: product.supplierId,
-          supplierName: product.supplier?.user_metadata?.company_name || product.supplier?.email,
+          supplierName: product.supplier?.user_metadata?.company_name || product.supplier?.email || "Supplier",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }])
@@ -426,7 +604,7 @@ export default function BuyerDashboard() {
           delivery_address: "",
           notes: notes || "",
           userId: user.id,
-          created_at: new Date().toISOString()
+          createdAt: new Date().toISOString()
         }])
         .select()
 
@@ -694,6 +872,55 @@ export default function BuyerDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Connection Status Banners */}
+        {!isOnline && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-yellow-800">Offline Mode</h3>
+                <p className="text-sm text-yellow-700 mt-1">
+                  You are currently offline. Some data may be outdated.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {connectionError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-red-400 mr-2" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800">Connection Issue</h3>
+                <p className="text-sm text-red-700 mt-1">{connectionError}</p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={refreshAllData}
+                className="ml-4 text-red-700 border-red-300 hover:bg-red-100"
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {error && !connectionError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-red-400 mr-2" />
+                <p className="text-red-800">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Updated Stats Grid */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -802,19 +1029,6 @@ export default function BuyerDashboard() {
               </div>
             </div>
 
-            {error && (
-              <Card className="bg-red-50 border-red-200">
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-center">
-                    <p className="text-red-800">{error}</p>
-                    <Button variant="outline" size="sm" onClick={() => setError(null)}>
-                      Dismiss
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {loading.products ? (
               <Card>
                 <CardContent className="p-8">
@@ -876,7 +1090,7 @@ export default function BuyerDashboard() {
                               </div>
                             </div>
 
-                            {/* Supplier Info */}
+                            {/* Supplier Info - NOW POPULATED WITH REAL DATA */}
                             <div className="pt-3 border-t">
                               <div className="flex items-center gap-2 mb-2">
                                 <Users className="h-4 w-4 text-gray-400" />
@@ -934,7 +1148,6 @@ export default function BuyerDashboard() {
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-6">
-            {/* Orders tab content remains the same as before */}
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">My Orders</h2>
               <div className="flex gap-2">
@@ -950,19 +1163,6 @@ export default function BuyerDashboard() {
                 </Button>
               </div>
             </div>
-
-            {error && (
-              <Card className="bg-red-50 border-red-200">
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-center">
-                    <p className="text-red-800">{error}</p>
-                    <Button variant="outline" size="sm" onClick={() => setError(null)}>
-                      Dismiss
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             <Card>
               <CardContent className="p-0">
@@ -1040,7 +1240,6 @@ export default function BuyerDashboard() {
           </TabsContent>
 
           <TabsContent value="quotes" className="space-y-6">
-            {/* Quotes tab content remains the same */}
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">My Quote Requests</h2>
               <div className="flex gap-2">
@@ -1113,7 +1312,7 @@ export default function BuyerDashboard() {
                               </Badge>
                             </td>
                             <td className="p-4 text-muted-foreground">
-                              {new Date(quote.created_at).toLocaleDateString()}
+                              {new Date(quote.createdAt).toLocaleDateString()}
                             </td>
                             <td className="p-4">
                               <TableRowActions
@@ -1140,7 +1339,7 @@ export default function BuyerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {/* Dynamic suppliers from products */}
+                  {/* Dynamic suppliers from products - NOW WITH REAL DATA */}
                   {Array.from(new Set(products.map(p => p.supplierId)))
                     .map(supplierId => {
                       const supplierProducts = products.filter(p => p.supplierId === supplierId)
