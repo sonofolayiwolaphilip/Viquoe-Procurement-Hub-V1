@@ -21,7 +21,6 @@ import { Plus, Package, Edit, Trash2, Eye, BarChart3, DollarSign, ShoppingCart, 
 import { supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
-// Interfaces based on your actual database schema
 interface Product {
   id: string
   name: string
@@ -82,26 +81,61 @@ export default function SupplierDashboard() {
     imageUrl: ""
   })
 
-  // SKU generator
+  // Generate unique SKU
   const generateSKU = () => {
-    return `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2, 7)
+    return `PROD-${timestamp}-${random}`.toUpperCase()
   }
 
-  // Image upload function
+  // Simplified image upload function with better error handling
   const uploadProductImage = async (file: File): Promise<string | null> => {
+    if (!file) return null
+
+    setIsUploading(true)
+
     try {
-      setIsUploading(true)
-      
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+      // Validate file
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file (JPEG, PNG, GIF, WebP)')
+        return null
+      }
+
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert('Image must be less than 5MB')
+        return null
+      }
+
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const timestamp = Date.now()
+      const randomId = Math.random().toString(36).substring(2, 10)
+      const fileName = `product_${timestamp}_${randomId}.${fileExt}`
       const filePath = `product-images/${fileName}`
 
+      // Upload file
       const { data, error } = await supabase.storage
         .from('products')
-        .upload(filePath, file)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        })
 
       if (error) {
-        console.error('Error uploading image:', error)
+        console.error('Image upload error:', error)
+        
+        // User-friendly error messages
+        if (error.message.includes('permission denied') || error.message.includes('not authenticated')) {
+          alert('You do not have permission to upload images')
+        } else if (error.message.includes('not found') || error.message.includes('bucket')) {
+          alert('Storage service not available. Please contact support.')
+        } else if (error.message.includes('size') || error.message.includes('too large')) {
+          alert('File is too large. Please use an image under 5MB.')
+        } else {
+          alert(`Upload failed: ${error.message}`)
+        }
+        
         return null
       }
 
@@ -110,20 +144,22 @@ export default function SupplierDashboard() {
         .from('products')
         .getPublicUrl(filePath)
 
+      console.log('Image uploaded successfully:', publicUrl)
       return publicUrl
-    } catch (error) {
-      console.error('Error in uploadProductImage:', error)
+
+    } catch (error: any) {
+      console.error('Unexpected upload error:', error)
+      alert('Failed to upload image. Please try again.')
       return null
     } finally {
       setIsUploading(false)
     }
   }
 
-  // Fetch user session and all data
+  // Fetch user session and initialize data
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Get user session
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
@@ -133,17 +169,15 @@ export default function SupplierDashboard() {
         }
         
         if (!session) {
-          console.log('No session found, redirecting to login')
           router.push('/login')
           return
         }
 
-        console.log('User session:', session.user)
         setUser(session.user)
-        
-        // Fetch all data
-        await fetchCategories()
-        await fetchProducts(session.user.id)
+        await Promise.all([
+          fetchCategories(),
+          fetchProducts(session.user.id)
+        ])
         
       } catch (error) {
         console.error('Error initializing data:', error)
@@ -156,11 +190,9 @@ export default function SupplierDashboard() {
     initializeData()
   }, [router])
 
-  // Fetch categories from database with better error handling
+  // Fetch categories
   const fetchCategories = async () => {
     try {
-      console.log('Fetching categories...')
-      
       const { data, error } = await supabase
         .from('Category')
         .select('*')
@@ -170,48 +202,22 @@ export default function SupplierDashboard() {
       if (error) {
         console.error('Error fetching categories:', error)
         
-        // Only show RLS error for specific permission denied messages
-        if (error.message.includes('policy') || error.message.includes('RLS') || error.message.includes('permission denied for table')) {
-          setRlsError('Database permissions issue. Please contact administrator to set up RLS policies.')
+        if (error.message.includes('policy') || error.message.includes('permission denied')) {
+          setRlsError('Database permissions issue. Please contact administrator.')
         } else {
           setCategoriesError(`Error loading categories: ${error.message}`)
         }
         
-        // Use fallback categories
+        // Fallback categories
         const fallbackCategories: Category[] = [
-          {
-            id: 'office-supplies',
-            name: 'Office Supplies',
-            description: 'Office supplies and equipment',
-            isActive: true,
-            image: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 'it-equipment',
-            name: 'IT Equipment',
-            description: 'Computers and technology equipment',
-            isActive: true,
-            image: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 'furniture',
-            name: 'Furniture',
-            description: 'Office furniture',
-            isActive: true,
-            image: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
+          { id: 'office-supplies', name: 'Office Supplies', description: 'Office supplies', isActive: true, image: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'it-equipment', name: 'IT Equipment', description: 'Computers and tech', isActive: true, image: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          { id: 'furniture', name: 'Furniture', description: 'Office furniture', isActive: true, image: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
         ]
         setCategories(fallbackCategories)
         return
       }
 
-      console.log('Fetched categories successfully:', data)
       setCategories(data || [])
       setCategoriesError(null)
       setRlsError(null)
@@ -224,8 +230,6 @@ export default function SupplierDashboard() {
   // Fetch products for the supplier
   const fetchProducts = async (userId: string) => {
     try {
-      console.log('Fetching products for user:', userId)
-
       const { data, error } = await supabase
         .from('Product')
         .select('*')
@@ -235,32 +239,26 @@ export default function SupplierDashboard() {
       if (error) {
         console.error('Error fetching products:', error)
         
-        // More specific RLS error detection
-        if (error.message.includes('policy') || error.message.includes('RLS') || error.message.includes('permission denied for table')) {
-          setRlsError('Database permissions issue. Please contact administrator to set up RLS policies.')
-          setProducts([])
-          return
+        if (error.message.includes('policy') || error.message.includes('permission denied')) {
+          setRlsError('Database permissions issue. Please contact administrator.')
         }
         
-        // For other errors, try to continue with empty products
-        console.warn('Non-RLS error fetching products:', error)
         setProducts([])
         return
       }
 
-      console.log('Fetched products:', data)
       setProducts(data || [])
-      setRlsError(null)
     } catch (error) {
       console.error('Error fetching products:', error)
-      // Don't set RLS error for generic errors
       setProducts([])
     }
   }
 
+  // Add new product
   const handleAddProduct = async () => {
+    // Validate required fields
     if (!newProduct.name || !newProduct.categoryId || !newProduct.price || !newProduct.stock) {
-      alert('Please fill in all required fields')
+      alert('Please fill in all required fields (Name, Category, Price, Stock)')
       return
     }
 
@@ -276,82 +274,91 @@ export default function SupplierDashboard() {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
       if (sessionError || !session) {
-        throw new Error('Not authenticated: ' + sessionError?.message)
+        throw new Error('Not authenticated')
       }
 
-      let imageUrl = newProduct.imageUrl
+      let imageUrl = null
 
       // Upload image if provided
       if (newProduct.image) {
-        const uploadedUrl = await uploadProductImage(newProduct.image)
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl
-        }
+        imageUrl = await uploadProductImage(newProduct.image)
+        // Continue even if image upload fails
       }
 
-      // Real database operation
+      // Prepare product data
       const productData = {
-        name: newProduct.name,
-        description: newProduct.description,
-        price: Number.parseFloat(newProduct.price),
+        name: newProduct.name.trim(),
+        description: newProduct.description.trim() || null,
+        price: parseFloat(newProduct.price),
         sku: generateSKU(),
-        image: imageUrl || null,
-        stock: Number.parseInt(newProduct.stock),
-        minOrder: Number.parseInt(newProduct.minOrder) || 1,
+        image: imageUrl,
+        stock: parseInt(newProduct.stock),
+        minOrder: parseInt(newProduct.minOrder) || 1,
         isActive: true,
         categoryId: newProduct.categoryId,
         supplierId: session.user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString() // Required field
       }
 
-      console.log('Inserting product:', productData)
+      // Validate price and stock
+      if (productData.price <= 0 || productData.stock < 0) {
+        alert('Price must be greater than 0 and stock cannot be negative')
+        return
+      }
 
+      // Insert product
       const { data, error } = await supabase
         .from('Product')
         .insert([productData])
         .select()
 
       if (error) {
-        console.error('Supabase insert error:', error)
+        console.error('Insert error:', error)
         
-        // If RLS error for insert
-        if (error.message.includes('permission denied')) {
-          setRlsError('Database permissions issue. Please contact administrator to set up RLS policies.')
-          alert('Permission denied. Please contact administrator to set up database permissions.')
-          return
+        if (error.code === '23502') { // not-null violation
+          alert('Missing required fields. Please fill all required fields.')
+        } else if (error.code === '23503') { // foreign key violation
+          alert('Invalid category selected.')
+        } else if (error.code === '23505') { // unique violation
+          alert('Product with similar details already exists.')
+        } else if (error.message.includes('permission denied')) {
+          setRlsError('Database permissions issue. Please contact administrator.')
+          alert('Permission denied. Please contact administrator.')
+        } else {
+          alert(`Error adding product: ${error.message}`)
         }
-        
-        throw error
+        return
       }
 
-      if (data && data[0]) {
+      // Add new product to state
+      if (data?.[0]) {
         setProducts([data[0], ...products])
       }
 
-      // Reset form
-      setNewProduct({ 
-        name: "", 
-        categoryId: "", 
-        price: "", 
-        stock: "", 
+      // Reset form and close dialog
+      setNewProduct({
+        name: "",
+        categoryId: "",
+        price: "",
+        stock: "",
         minOrder: "1",
-        description: "", 
+        description: "",
         image: null,
-        imageUrl: "" 
+        imageUrl: ""
       })
       setIsAddProductOpen(false)
       
       alert('Product added successfully!')
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding product:', error)
-      alert('Error adding product: ' + (error as any)?.message)
+      alert('Error adding product. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  // Delete product
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) {
       return
@@ -365,24 +372,40 @@ export default function SupplierDashboard() {
 
       if (error) {
         if (error.message.includes('permission denied')) {
-          setRlsError('Database permissions issue. Please contact administrator to set up RLS policies.')
-          alert('Permission denied. Please contact administrator to set up database permissions.')
-          return
+          setRlsError('Database permissions issue. Please contact administrator.')
+          alert('Permission denied. Please contact administrator.')
+        } else {
+          throw error
         }
-        throw error
+        return
       }
 
       setProducts(products.filter((p) => p.id !== id))
       alert('Product deleted successfully!')
     } catch (error) {
       console.error('Error deleting product:', error)
-      alert('Error deleting product: ' + (error as any)?.message)
+      alert('Error deleting product. Please try again.')
     }
   }
 
+  // Handle image file selection
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file')
+        e.target.value = '' // Clear file input
+        return
+      }
+
+      // Validate file size
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image must be less than 5MB')
+        e.target.value = ''
+        return
+      }
+
       setNewProduct({
         ...newProduct,
         image: file,
@@ -391,14 +414,15 @@ export default function SupplierDashboard() {
     }
   }
 
+  // Sign out
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  // Calculate real statistics
+  // Statistics
   const totalProducts = products.length
-  const totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0)
+  const totalValue = products.reduce((sum, p) => sum + (p.price * p.stock), 0)
   const lowStockProducts = products.filter((p) => p.stock < 10).length
 
   if (isLoading) {
@@ -435,7 +459,7 @@ export default function SupplierDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* RLS Error Banner */}
+        {/* Error Banners */}
         {rlsError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
             <div className="flex items-center">
@@ -443,22 +467,19 @@ export default function SupplierDashboard() {
               <div>
                 <h3 className="text-sm font-medium text-red-800">Database Permissions Required</h3>
                 <p className="text-sm text-red-700 mt-1">{rlsError}</p>
-                <div className="mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => window.open('https://supabase.com/docs/guides/auth/row-level-security', '_blank')}
-                    className="text-red-700 border-red-300 hover:bg-red-100"
-                  >
-                    Learn about RLS Policies
-                  </Button>
-                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => window.open('https://supabase.com/docs/guides/auth/row-level-security', '_blank')}
+                  className="mt-2 text-red-700 border-red-300 hover:bg-red-100"
+                >
+                  Learn about RLS Policies
+                </Button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Categories Error Banner */}
         {categoriesError && !rlsError && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
             <div className="flex items-center">
@@ -466,16 +487,14 @@ export default function SupplierDashboard() {
               <div>
                 <h3 className="text-sm font-medium text-yellow-800">Categories Loading Issue</h3>
                 <p className="text-sm text-yellow-700 mt-1">{categoriesError}</p>
-                <div className="mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={fetchCategories}
-                    className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
-                  >
-                    Retry Loading Categories
-                  </Button>
-                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchCategories}
+                  className="mt-2 text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+                >
+                  Retry Loading Categories
+                </Button>
               </div>
             </div>
           </div>
@@ -544,7 +563,7 @@ export default function SupplierDashboard() {
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>Add New Product</DialogTitle>
-                    <DialogDescription>Add a new product to your catalog for buyers to discover</DialogDescription>
+                    <DialogDescription>Add a new product to your catalog</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -555,6 +574,7 @@ export default function SupplierDashboard() {
                           value={newProduct.name}
                           onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                           placeholder="HP LaserJet Pro M404n"
+                          required
                         />
                       </div>
                       <div className="space-y-2">
@@ -574,9 +594,7 @@ export default function SupplierDashboard() {
                                 </SelectItem>
                               ))
                             ) : (
-                              <SelectItem value="" disabled>
-                                No categories available
-                              </SelectItem>
+                              <SelectItem value="" disabled>No categories available</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -588,9 +606,12 @@ export default function SupplierDashboard() {
                         <Input
                           id="price"
                           type="number"
+                          min="0.01"
+                          step="0.01"
                           value={newProduct.price}
                           onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
                           placeholder="85000"
+                          required
                         />
                       </div>
                       <div className="space-y-2">
@@ -598,9 +619,11 @@ export default function SupplierDashboard() {
                         <Input
                           id="stock"
                           type="number"
+                          min="0"
                           value={newProduct.stock}
                           onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
                           placeholder="25"
+                          required
                         />
                       </div>
                       <div className="space-y-2">
@@ -608,10 +631,10 @@ export default function SupplierDashboard() {
                         <Input
                           id="minOrder"
                           type="number"
+                          min="1"
                           value={newProduct.minOrder}
                           onChange={(e) => setNewProduct({ ...newProduct, minOrder: e.target.value })}
                           placeholder="1"
-                          min="1"
                         />
                       </div>
                     </div>
@@ -622,10 +645,11 @@ export default function SupplierDashboard() {
                         value={newProduct.description}
                         onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
                         placeholder="Professional laser printer for office use"
+                        rows={3}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="image">Product Image</Label>
+                      <Label htmlFor="image">Product Image (Optional)</Label>
                       <div className="flex items-center gap-4">
                         <Input
                           id="image"
@@ -640,8 +664,9 @@ export default function SupplierDashboard() {
                           <img 
                             src={newProduct.imageUrl} 
                             alt="Preview" 
-                            className="w-20 h-20 object-cover rounded-lg"
+                            className="w-20 h-20 object-cover rounded-lg border"
                           />
+                          <p className="text-xs text-gray-500 mt-1">Preview</p>
                         </div>
                       )}
                     </div>
@@ -650,7 +675,10 @@ export default function SupplierDashboard() {
                     <Button variant="outline" onClick={() => setIsAddProductOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleAddProduct} disabled={isSubmitting || isUploading}>
+                    <Button 
+                      onClick={handleAddProduct} 
+                      disabled={isSubmitting || isUploading}
+                    >
                       {isSubmitting ? "Adding..." : "Add Product"}
                     </Button>
                   </div>
@@ -660,58 +688,66 @@ export default function SupplierDashboard() {
 
             <Card>
               <CardContent className="p-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4 font-medium">Product</th>
-                        <th className="text-left py-3 px-4 font-medium">Category</th>
-                        <th className="text-left py-3 px-4 font-medium">Price</th>
-                        <th className="text-left py-3 px-4 font-medium">Stock</th>
-                        <th className="text-left py-3 px-4 font-medium">Min Order</th>
-                        <th className="text-left py-3 px-4 font-medium">Status</th>
-                        <th className="text-left py-3 px-4 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="text-center text-gray-600 py-8">
-                            {rlsError ? (
-                              <div className="flex flex-col items-center space-y-2">
-                                <AlertCircle className="h-8 w-8 text-red-400" />
-                                <p>Cannot load products due to database permissions</p>
-                                <p className="text-sm">Please set up RLS policies to continue</p>
-                              </div>
-                            ) : (
-                              "No products yet. Click 'Add Product' to get started."
-                            )}
-                          </td>
+                {products.length === 0 ? (
+                  <div className="text-center text-gray-600 py-12">
+                    {rlsError ? (
+                      <div className="flex flex-col items-center space-y-2">
+                        <AlertCircle className="h-8 w-8 text-red-400" />
+                        <p>Cannot load products due to database permissions</p>
+                        <p className="text-sm">Please set up RLS policies to continue</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center space-y-4">
+                        <Package className="h-12 w-12 text-gray-400" />
+                        <p className="text-lg">No products yet</p>
+                        <p className="text-sm">Click "Add Product" to get started</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-4 font-medium">Product</th>
+                          <th className="text-left py-3 px-4 font-medium">Category</th>
+                          <th className="text-left py-3 px-4 font-medium">Price</th>
+                          <th className="text-left py-3 px-4 font-medium">Stock</th>
+                          <th className="text-left py-3 px-4 font-medium">Min Order</th>
+                          <th className="text-left py-3 px-4 font-medium">Status</th>
+                          <th className="text-left py-3 px-4 font-medium">Actions</th>
                         </tr>
-                      ) : (
-                        products.map((product) => {
+                      </thead>
+                      <tbody>
+                        {products.map((product) => {
                           const category = categories.find(c => c.id === product.categoryId)
                           return (
                             <tr key={product.id} className="border-b hover:bg-gray-50">
                               <td className="py-4 px-4">
                                 <div className="flex items-center space-x-3">
-                                  <img
-                                    src={product.image || "/placeholder.svg"}
-                                    alt={product.name}
-                                    className="w-10 h-10 rounded-lg object-cover"
-                                  />
+                                  <div className="w-10 h-10 flex-shrink-0">
+                                    <img
+                                      src={product.image || "/placeholder.svg"}
+                                      alt={product.name}
+                                      className="w-full h-full rounded-lg object-cover"
+                                    />
+                                  </div>
                                   <div>
                                     <div className="font-medium">{product.name}</div>
                                     <div className="text-sm text-gray-600">
-                                      Added {new Date(product.createdAt).toLocaleDateString()}
+                                      SKU: {product.sku}
                                     </div>
                                   </div>
                                 </div>
                               </td>
                               <td className="py-4 px-4">
-                                <Badge variant="secondary">{category?.name || product.categoryId}</Badge>
+                                <Badge variant="secondary">
+                                  {category?.name || product.categoryId}
+                                </Badge>
                               </td>
-                              <td className="py-4 px-4">₦{product.price.toLocaleString()}</td>
+                              <td className="py-4 px-4 font-medium">
+                                ₦{product.price.toLocaleString()}
+                              </td>
                               <td className="py-4 px-4">
                                 <span className={product.stock < 10 ? "text-yellow-600 font-medium" : ""}>
                                   {product.stock}
@@ -720,20 +756,21 @@ export default function SupplierDashboard() {
                               <td className="py-4 px-4">{product.minOrder}</td>
                               <td className="py-4 px-4">
                                 <Badge variant={product.isActive ? "default" : "secondary"}>
-                                  {product.isActive ? "active" : "inactive"}
+                                  {product.isActive ? "Active" : "Inactive"}
                                 </Badge>
                               </td>
                               <td className="py-4 px-4">
                                 <div className="flex items-center space-x-2">
-                                  <Button size="sm" variant="ghost">
+                                  <Button size="sm" variant="ghost" title="View">
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  <Button size="sm" variant="ghost">
+                                  <Button size="sm" variant="ghost" title="Edit">
                                     <Edit className="h-4 w-4" />
                                   </Button>
                                   <Button 
                                     size="sm" 
                                     variant="ghost" 
+                                    title="Delete"
                                     onClick={() => handleDeleteProduct(product.id)}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -742,11 +779,11 @@ export default function SupplierDashboard() {
                               </td>
                             </tr>
                           )
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -758,12 +795,11 @@ export default function SupplierDashboard() {
                 <CardDescription>Orders placed for your products</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
-                  {rlsError 
-                    ? "Cannot load orders due to database permissions. Please set up RLS policies."
-                    : "No orders yet. Your products will appear here once buyers place orders."
-                  }
-                </p>
+                <div className="text-center py-12 text-gray-600">
+                  <ShoppingCart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p>No orders yet</p>
+                  <p className="text-sm mt-1">Your products will appear here once buyers place orders</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -775,12 +811,11 @@ export default function SupplierDashboard() {
                 <CardDescription>Performance metrics for your products</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-600">
-                  {rlsError 
-                    ? "Cannot load analytics due to database permissions. Please set up RLS policies."
-                    : "Analytics dashboard coming soon."
-                  }
-                </p>
+                <div className="text-center py-12 text-gray-600">
+                  <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p>Analytics dashboard coming soon</p>
+                  <p className="text-sm mt-1">Check back later for detailed sales insights</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
