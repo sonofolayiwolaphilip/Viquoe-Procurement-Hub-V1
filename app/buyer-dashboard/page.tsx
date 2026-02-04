@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw, Eye } from "lucide-react"
+import { ShoppingCart, Package, Clock, CheckCircle, Search, Plus, LogOut, Home, Trash2, FileText, RefreshCw, Eye, Filter, Star, ShoppingBag, Users, ChevronRight, MapPin, Phone } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
@@ -50,6 +51,45 @@ interface QuoteRequest {
   notes: string
 }
 
+interface Product {
+  id: string
+  name: string
+  description: string | null
+  price: number
+  sku: string
+  image: string | null
+  stock: number
+  minOrder: number
+  isActive: boolean
+  categoryId: string
+  supplierId: string
+  createdAt: string
+  updatedAt: string
+  category?: {
+    id: string
+    name: string
+  }
+  supplier?: {
+    id: string
+    email: string
+    user_metadata?: {
+      company_name?: string
+      phone?: string
+      location?: string
+    }
+  }
+}
+
+interface Category {
+  id: string
+  name: string
+  description: string | null
+  isActive: boolean
+  image: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 interface ConfirmationState {
   isOpen: boolean
   type: 'order' | 'quote' | null
@@ -65,9 +105,20 @@ export default function BuyerDashboard() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
   const [quotes, setQuotes] = useState<QuoteRequest[]>([])
-  const [loading, setLoading] = useState({ orders: true, quotes: true })
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState({ 
+    orders: true, 
+    quotes: true, 
+    products: true,
+    categories: true 
+  })
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [sortBy, setSortBy] = useState<"newest" | "price-low" | "price-high">("newest")
+  
   const [confirmation, setConfirmation] = useState<ConfirmationState>({
     isOpen: false,
     type: null,
@@ -126,37 +177,36 @@ export default function BuyerDashboard() {
   })
 
   // Enhanced fetch function with supplier data
- const fetchOrders = useCallback(async () => {
-  if (!user?.id) return
+  const fetchOrders = useCallback(async () => {
+    if (!user?.id) return
 
-  try {
-    setLoading(prev => ({ ...prev, orders: true }))
-    setError(null)
-    logger.debug('BuyerDashboard', 'Fetching orders', { userId: user.id })
+    try {
+      setLoading(prev => ({ ...prev, orders: true }))
+      setError(null)
+      logger.debug('BuyerDashboard', 'Fetching orders', { userId: user.id })
 
-    const { data, error: fetchError } = await supabase
-      .from("Order")
-      .select("*")
-      .eq("userId", user.id)
-      .order("createdAt", { ascending: false })
+      const { data, error: fetchError } = await supabase
+        .from("Order")
+        .select("*")
+        .eq("userId", user.id)
+        .order("createdAt", { ascending: false })
 
-    if (fetchError) throw fetchError
+      if (fetchError) throw fetchError
 
-    // Use existing supplierName if available, otherwise use fallback
-    const ordersWithFallbackNames = (data || []).map(order => ({
-      ...order,
-      supplierName: order.supplierName || 'Supplier'
-    }))
+      const ordersWithFallbackNames = (data || []).map(order => ({
+        ...order,
+        supplierName: order.supplierName || 'Supplier'
+      }))
 
-    setOrders(ordersWithFallbackNames)
-    logger.info('BuyerDashboard', 'Orders fetched successfully', { count: data?.length })
-  } catch (err: any) {
-    logger.error('BuyerDashboard', 'Error fetching orders', err)
-    setError(err.message || "Failed to load orders")
-  } finally {
-    setLoading(prev => ({ ...prev, orders: false }))
-  }
-}, [user?.id])
+      setOrders(ordersWithFallbackNames)
+      logger.info('BuyerDashboard', 'Orders fetched successfully', { count: data?.length })
+    } catch (err: any) {
+      logger.error('BuyerDashboard', 'Error fetching orders', err)
+      setError(err.message || "Failed to load orders")
+    } finally {
+      setLoading(prev => ({ ...prev, orders: false }))
+    }
+  }, [user?.id])
 
   const fetchQuotes = useCallback(async () => {
     if (!user?.id) return
@@ -182,32 +232,215 @@ export default function BuyerDashboard() {
     }
   }, [user?.id])
 
+  // Fetch all active products
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, products: true }))
+      logger.debug('BuyerDashboard', 'Fetching products')
+
+      // Fetch products with category and supplier info
+      const { data: productsData, error: productsError } = await supabase
+        .from("Product")
+        .select(`
+          *,
+          category:Category(*),
+          supplier:supplierId(*)
+        `)
+        .eq("isActive", true)
+        .order("createdAt", { ascending: false })
+
+      if (productsError) throw productsError
+
+      setProducts(productsData || [])
+      logger.info('BuyerDashboard', 'Products fetched successfully', { count: productsData?.length })
+    } catch (err: any) {
+      logger.error('BuyerDashboard', 'Error fetching products', err)
+      setError("Failed to load products")
+    } finally {
+      setLoading(prev => ({ ...prev, products: false }))
+    }
+  }, [])
+
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, categories: true }))
+
+      const { data, error } = await supabase
+        .from("Category")
+        .select("*")
+        .eq("isActive", true)
+        .order("name", { ascending: true })
+
+      if (error) throw error
+
+      setCategories(data || [])
+    } catch (err: any) {
+      logger.error('BuyerDashboard', 'Error fetching categories', err)
+      // Continue with empty categories
+    } finally {
+      setLoading(prev => ({ ...prev, categories: false }))
+    }
+  }, [])
+
   const refreshAllData = useCallback(async () => {
     setRefreshing(true)
     logger.info('BuyerDashboard', 'Manual refresh triggered')
     
     try {
-      await Promise.all([fetchOrders(), fetchQuotes()])
+      await Promise.all([
+        fetchOrders(), 
+        fetchQuotes(), 
+        fetchProducts(), 
+        fetchCategories()
+      ])
       logger.info('BuyerDashboard', 'Manual refresh completed')
     } catch (err) {
       logger.error('BuyerDashboard', 'Error during manual refresh', err)
     } finally {
       setRefreshing(false)
     }
-  }, [fetchOrders, fetchQuotes])
+  }, [fetchOrders, fetchQuotes, fetchProducts, fetchCategories])
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
       fetchOrders()
       fetchQuotes()
+      fetchProducts()
+      fetchCategories()
     }
-  }, [isAuthenticated, user, fetchOrders, fetchQuotes])
+  }, [isAuthenticated, user, fetchOrders, fetchQuotes, fetchProducts, fetchCategories])
 
   useEffect(() => {
     if (!authLoading && (!isAuthenticated || user?.userType !== "buyer")) {
       router.push("/login")
     }
   }, [isAuthenticated, user, authLoading, router])
+
+  // Filter and sort products
+  const filteredProducts = useMemo(() => {
+    let filtered = [...products]
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(product => 
+        product.name.toLowerCase().includes(query) ||
+        product.description?.toLowerCase().includes(query) ||
+        product.category?.name.toLowerCase().includes(query) ||
+        product.supplier?.user_metadata?.company_name?.toLowerCase().includes(query)
+      )
+    }
+
+    // Filter by category
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(product => product.categoryId === selectedCategory)
+    }
+
+    // Sort products
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price-low":
+          return a.price - b.price
+        case "price-high":
+          return b.price - a.price
+        case "newest":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
+    })
+
+    return filtered
+  }, [products, searchQuery, selectedCategory, sortBy])
+
+  // Handle product order
+  const handleOrderProduct = async (product: Product) => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    try {
+      // Generate order number
+      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
+      
+      // Create order
+      const { data, error } = await supabase
+        .from("Order")
+        .insert([{
+          orderNumber,
+          userId: user.id,
+          status: "PENDING",
+          totalAmount: product.price,
+          productName: product.name,
+          productImage: product.image,
+          quantity: product.minOrder,
+          supplierId: product.supplierId,
+          supplierName: product.supplier?.user_metadata?.company_name || product.supplier?.email,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }])
+        .select()
+
+      if (error) throw error
+
+      if (data?.[0]) {
+        setOrders(prev => [data[0], ...prev])
+        alert(`Order placed successfully! Order #${orderNumber}`)
+      }
+    } catch (err: any) {
+      console.error('Error placing order:', err)
+      alert(`Failed to place order: ${err.message}`)
+    }
+  }
+
+  // Handle quote request
+  const handleRequestQuote = async (product: Product) => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const quantity = prompt(`Enter quantity for ${product.name} (min: ${product.minOrder}):`, product.minOrder.toString())
+    
+    if (!quantity || parseInt(quantity) < product.minOrder) {
+      alert(`Minimum order quantity is ${product.minOrder}`)
+      return
+    }
+
+    const notes = prompt("Add any special requirements or notes:")
+
+    try {
+      const { data, error } = await supabase
+        .from("QuoteRequest")
+        .insert([{
+          product_name: product.name,
+          supplier: product.supplier?.user_metadata?.company_name || product.supplier?.email || "Supplier",
+          quantity: parseInt(quantity),
+          urgency: "normal",
+          status: "pending",
+          unit_price: product.price,
+          total_price: product.price * parseInt(quantity),
+          contact_person: user.email || "",
+          phone: "",
+          delivery_address: "",
+          notes: notes || "",
+          userId: user.id,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+
+      if (error) throw error
+
+      if (data?.[0]) {
+        setQuotes(prev => [data[0], ...prev])
+        alert("Quote request sent successfully!")
+      }
+    } catch (err: any) {
+      console.error('Error requesting quote:', err)
+      alert(`Failed to request quote: ${err.message}`)
+    }
+  }
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -294,8 +527,10 @@ export default function BuyerDashboard() {
     totalSpent: orders.filter((o) => 
       o.status === "DELIVERED" || o.status === "delivered")
       .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
-    pendingQuotes: quotes.filter((q) => q.status === "pending").length
-  }), [orders, quotes])
+    pendingQuotes: quotes.filter((q) => q.status === "pending").length,
+    totalProducts: products.length,
+    activeSuppliers: new Set(products.map(p => p.supplierId)).size
+  }), [orders, quotes, products])
 
   const getStatusColor = (status: string) => {
     const statusMap: Record<string, string> = {
@@ -319,7 +554,12 @@ export default function BuyerDashboard() {
     return statusMap[status.toLowerCase()] || status
   }
 
-  // Reusable Refresh Button Component
+  const getStockStatus = (stock: number) => {
+    if (stock === 0) return { text: "Out of Stock", color: "bg-red-100 text-red-800" }
+    if (stock < 10) return { text: "Low Stock", color: "bg-yellow-100 text-yellow-800" }
+    return { text: "In Stock", color: "bg-green-100 text-green-800" }
+  }
+
   const RefreshButton = ({ 
     onClick, 
     loading, 
@@ -340,7 +580,6 @@ export default function BuyerDashboard() {
     </Button>
   )
 
-  // Reusable Empty State Component
   const EmptyState = ({ 
     icon: Icon, 
     title, 
@@ -364,7 +603,6 @@ export default function BuyerDashboard() {
     </div>
   )
 
-  // Reusable Loading State Component
   const LoadingState = ({ message }: { message: string }) => (
     <div className="p-8 text-center text-muted-foreground">
       <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
@@ -372,7 +610,6 @@ export default function BuyerDashboard() {
     </div>
   )
 
-  // Table Row Actions Component
   const TableRowActions = ({ 
     type, 
     id, 
@@ -434,7 +671,7 @@ export default function BuyerDashboard() {
               <Button asChild>
                 <Link href="/buyer-portal">
                   <Search className="h-4 w-4 mr-2" />
-                  Browse Products
+                  Browse More
                 </Link>
               </Button>
               <Button variant="outline" asChild>
@@ -457,8 +694,30 @@ export default function BuyerDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid */}
+        {/* Updated Stats Grid */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardStats.totalProducts}</div>
+              <p className="text-xs text-muted-foreground mt-1">Available from suppliers</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Suppliers</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{dashboardStats.activeSuppliers}</div>
+              <p className="text-xs text-muted-foreground mt-1">Verified vendors</p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
@@ -466,26 +725,9 @@ export default function BuyerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{dashboardStats.totalOrders}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{dashboardStats.pendingOrders}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Delivered Orders</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{dashboardStats.deliveredOrders}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {dashboardStats.pendingOrders} pending
+              </p>
             </CardContent>
           </Card>
 
@@ -496,12 +738,16 @@ export default function BuyerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">₦{dashboardStats.totalSpent.toLocaleString()}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {dashboardStats.deliveredOrders} delivered
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="orders" className="space-y-6">
+        <Tabs defaultValue="products" className="space-y-6">
           <TabsList>
+            <TabsTrigger value="products">Browse Products</TabsTrigger>
             <TabsTrigger value="orders">My Orders</TabsTrigger>
             <TabsTrigger value="quotes">
               Quote Requests
@@ -512,7 +758,183 @@ export default function BuyerDashboard() {
             <TabsTrigger value="suppliers">My Suppliers</TabsTrigger>
           </TabsList>
 
+          {/* Products Tab Content */}
+          <TabsContent value="products" className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <h2 className="text-2xl font-bold">Browse Products</h2>
+              <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                <div className="relative flex-1 md:w-64">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-3 py-2 border rounded-md text-sm bg-white"
+                  >
+                    <option value="all">All Categories</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3 py-2 border rounded-md text-sm bg-white"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                  </select>
+                  <RefreshButton 
+                    onClick={fetchProducts}
+                    loading={loading.products}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <Card className="bg-red-50 border-red-200">
+                <CardContent className="pt-6">
+                  <div className="flex justify-between items-center">
+                    <p className="text-red-800">{error}</p>
+                    <Button variant="outline" size="sm" onClick={() => setError(null)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {loading.products ? (
+              <Card>
+                <CardContent className="p-8">
+                  <LoadingState message="Loading products..." />
+                </CardContent>
+              </Card>
+            ) : filteredProducts.length === 0 ? (
+              <Card>
+                <CardContent className="p-8">
+                  <EmptyState
+                    icon={Package}
+                    title="No products found"
+                    description="Try adjusting your search or filters"
+                    buttonText="Clear Filters"
+                    buttonHref="#"
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.map((product) => {
+                  const stockStatus = getStockStatus(product.stock)
+                  return (
+                    <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="relative h-48 bg-gray-100">
+                        <img
+                          src={product.image || "/placeholder.svg"}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <Badge className="absolute top-2 left-2">
+                          {product.category?.name || "Uncategorized"}
+                        </Badge>
+                        <Badge className={`absolute top-2 right-2 ${stockStatus.color}`}>
+                          {stockStatus.text}
+                        </Badge>
+                      </div>
+                      <CardContent className="p-6">
+                        <div className="space-y-4">
+                          <div>
+                            <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
+                            <p className="text-sm text-gray-600 line-clamp-2">
+                              {product.description || "No description available"}
+                            </p>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-2xl font-bold text-primary">
+                                  ₦{product.price.toLocaleString()}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Min order: {product.minOrder} units
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                Stock: {product.stock} units
+                              </div>
+                            </div>
+
+                            {/* Supplier Info */}
+                            <div className="pt-3 border-t">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Users className="h-4 w-4 text-gray-400" />
+                                <span className="font-medium text-sm">
+                                  {product.supplier?.user_metadata?.company_name || product.supplier?.email || "Supplier"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-gray-500">
+                                {product.supplier?.user_metadata?.location && (
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {product.supplier.user_metadata.location}
+                                  </div>
+                                )}
+                                {product.supplier?.user_metadata?.phone && (
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="h-3 w-3" />
+                                    {product.supplier.user_metadata.phone}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-4">
+                            <Button
+                              className="flex-1"
+                              onClick={() => handleOrderProduct(product)}
+                              disabled={product.stock === 0}
+                            >
+                              <ShoppingCart className="h-4 w-4 mr-2" />
+                              Order Now
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => handleRequestQuote(product)}
+                              disabled={product.stock === 0}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+
+            {filteredProducts.length > 0 && (
+              <div className="text-center text-sm text-gray-500">
+                Showing {filteredProducts.length} of {products.length} products
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="orders" className="space-y-6">
+            {/* Orders tab content remains the same as before */}
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">My Orders</h2>
               <div className="flex gap-2">
@@ -559,7 +981,7 @@ export default function BuyerDashboard() {
                         <tr>
                           <th className="text-left p-4 font-medium">Order #</th>
                           <th className="text-left p-4 font-medium">Product</th>
-                          
+                          <th className="text-left p-4 font-medium">Supplier</th>
                           <th className="text-left p-4 font-medium">Quantity</th>
                           <th className="text-left p-4 font-medium">Total</th>
                           <th className="text-left p-4 font-medium">Status</th>
@@ -583,7 +1005,9 @@ export default function BuyerDashboard() {
                                 )}
                               </div>
                             </td>
-                            
+                            <td className="p-4">
+                              {order.supplierName || 'Supplier'}
+                            </td>
                             <td className="p-4">
                               {order.quantity || 1}
                             </td>
@@ -616,6 +1040,7 @@ export default function BuyerDashboard() {
           </TabsContent>
 
           <TabsContent value="quotes" className="space-y-6">
+            {/* Quotes tab content remains the same */}
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold">My Quote Requests</h2>
               <div className="flex gap-2">
@@ -715,28 +1140,64 @@ export default function BuyerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25">
-                    <div>
-                      <h4 className="font-medium">TechSupply Nigeria</h4>
-                      <p className="text-sm text-muted-foreground">IT Equipment & Office Supplies</p>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary" className="text-xs">⭐ 4.8/5</Badge>
-                        <Badge variant="secondary" className="text-xs">📞 Quick Response</Badge>
-                      </div>
+                  {/* Dynamic suppliers from products */}
+                  {Array.from(new Set(products.map(p => p.supplierId)))
+                    .map(supplierId => {
+                      const supplierProducts = products.filter(p => p.supplierId === supplierId)
+                      const supplier = supplierProducts[0]?.supplier
+                      if (!supplier) return null
+                      
+                      return (
+                        <div key={supplierId} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                                <Users className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">
+                                  {supplier.user_metadata?.company_name || supplier.email}
+                                </h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {supplierProducts.length} product{supplierProducts.length !== 1 ? 's' : ''} available
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {supplier.user_metadata?.location && (
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <MapPin className="h-3 w-3" />
+                                  {supplier.user_metadata.location}
+                                </div>
+                              )}
+                              {supplier.user_metadata?.phone && (
+                                <div className="flex items-center gap-1 text-xs text-gray-600">
+                                  <Phone className="h-3 w-3" />
+                                  {supplier.user_metadata.phone}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <Badge>Verified</Badge>
+                            <Button size="sm" variant="ghost" asChild>
+                              <Link href={`/buyer-portal?supplier=${supplierId}`}>
+                                View Products
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                              </Link>
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  
+                  {products.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No suppliers found</p>
+                      <p className="text-sm mt-1">Start browsing products to discover suppliers</p>
                     </div>
-                    <Badge>Verified</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/25">
-                    <div>
-                      <h4 className="font-medium">Furniture Plus</h4>
-                      <p className="text-sm text-muted-foreground">Office Furniture & Equipment</p>
-                      <div className="flex gap-2 mt-2">
-                        <Badge variant="secondary" className="text-xs">⭐ 4.6/5</Badge>
-                        <Badge variant="secondary" className="text-xs">🚚 Fast Delivery</Badge>
-                      </div>
-                    </div>
-                    <Badge>Verified</Badge>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
